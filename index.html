@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Family Games</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: #1a1a2e;
+      color: #eee;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    main {
+      width: 100%;
+      max-width: 420px;
+    }
+    h1 {
+      color: #ffd700;
+      font-size: 1.75rem;
+      text-align: center;
+      margin-bottom: 8px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.45);
+      letter-spacing: 1px;
+    }
+    p.lead {
+      text-align: center;
+      color: rgba(255,255,255,0.75);
+      font-size: 0.95rem;
+      margin-bottom: 28px;
+    }
+    ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    a {
+      display: block;
+      padding: 16px 18px;
+      border-radius: 12px;
+      text-decoration: none;
+      color: #fff;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,215,0,0.25);
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    }
+    a:hover {
+      background: rgba(255,215,0,0.12);
+      border-color: rgba(255,215,0,0.55);
+      transform: translateY(-1px);
+    }
+    a strong {
+      display: block;
+      font-size: 1.05rem;
+      margin-bottom: 4px;
+      color: #ffd700;
+    }
+    a span {
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.7);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Family Games</h1>
+    <p class="lead">Pick a game to play.</p>
+    <ul>
+      <li>
+        <a href="road-cross/">
+          <strong>Bunny Road Crossing</strong>
+          <span>road-cross</span>
+        </a>
+      </li>
+      <li>
+        <a href="the-runaway-race/">
+          <strong>The Runaway Race</strong>
+          <span>the-runaway-race</span>
+        </a>
+      </li>
+    </ul>
+  </main>
+</body>
+</html>
