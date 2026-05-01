@@ -940,10 +940,11 @@ let voiceTranscript = '';
 let voicePulse = 0;
 let menuHoverVoice = false;
 
-// Flower sub-level: catch the star while avoiding / stomping monsters
+// Flower sub-level: catch stars while avoiding / stomping monsters
 let flowerSublevelFlowerIndex = -1;
 let savedPlayerX = 0, savedPlayerY = 0;
-let subStar = { x: 0, y: 0, vx: 0, vy: 0, radius: 14 };
+const SUB_FLOWER_STAR_COUNT = 3;
+let subStars = []; // { x, y, vx, vy, radius }
 let subMonsters = [];
 let subLives = 5;
 let subSquirrels = [];
@@ -1007,10 +1008,10 @@ let bananaMissed = 0;
 const BANANA_MONKEY_Y = H - 120;
 const BANANA_MONKEY_W = 62;
 const BANANA_MONKEY_H = 52;
-const BANANA_SPEED_MIN = 1.25;
-const BANANA_SPEED_MAX = 2.45;
+const BANANA_SPEED_MIN = 1.05;
+const BANANA_SPEED_MAX = 2.05;
 const BANANA_MISS_LIMIT = 5;
-const BANANA_TARGET_CATCH = 18;
+const BANANA_TARGET_CATCH = 5;
 
 // Boss fight (after finish line) — Bowser-like turtle, infinite bones
 let bossSavedX = 0, bossSavedY = 0, bossSavedCameraX = 0;
@@ -2461,13 +2462,19 @@ function doStartFlowerSublevel(flowerIndex) {
   savedPlayerY = player.y;
   subLives = 5;
   subAirJumpsLeft = 1;
-  subStar.radius = 14;
-  subStar.x = subStar.radius + 40 + Math.random() * (SUB_ARENA_W - 2 * subStar.radius - 80);
-  subStar.y = 70 + Math.random() * (SUB_GROUND_Y - 120 - 70);
-  const angle = Math.random() * Math.PI * 2;
-  const speed = 1.8 + Math.random() * 0.9;
-  subStar.vx = Math.cos(angle) * speed;
-  subStar.vy = Math.sin(angle) * speed;
+  subStars = [];
+  const starRadius = 14;
+  for (let si = 0; si < SUB_FLOWER_STAR_COUNT; si++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1.8 + Math.random() * 0.9;
+    subStars.push({
+      x: starRadius + 40 + Math.random() * (SUB_ARENA_W - 2 * starRadius - 80),
+      y: 70 + Math.random() * (SUB_GROUND_Y - 120 - 70),
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: starRadius
+    });
+  }
   subMonsters = [
     { x: 120, y: SUB_GROUND_Y - 28, vx: 1.2, w: 40, h: 28, alive: true },
     { x: SUB_ARENA_W - 180, y: SUB_GROUND_Y - 28, vx: -1.0, w: 40, h: 28, alive: true },
@@ -2584,13 +2591,15 @@ function updateFlowerSublevel() {
   }
   player.wf = (player.wf + (player.vx !== 0 ? 0.2 : 0)) % 4;
 
-  // Star: bounce around screen
-  subStar.x += subStar.vx;
-  subStar.y += subStar.vy;
-  if (subStar.x - subStar.radius < 0) { subStar.x = subStar.radius; subStar.vx = Math.abs(subStar.vx); }
-  if (subStar.x + subStar.radius > SUB_ARENA_W) { subStar.x = SUB_ARENA_W - subStar.radius; subStar.vx = -Math.abs(subStar.vx); }
-  if (subStar.y - subStar.radius < 50) { subStar.y = 50 + subStar.radius; subStar.vy = Math.abs(subStar.vy); }
-  if (subStar.y + subStar.radius > SUB_GROUND_Y - 30) { subStar.y = SUB_GROUND_Y - 30 - subStar.radius; subStar.vy = -Math.abs(subStar.vy); }
+  // Stars: bounce around screen
+  for (const st of subStars) {
+    st.x += st.vx;
+    st.y += st.vy;
+    if (st.x - st.radius < 0) { st.x = st.radius; st.vx = Math.abs(st.vx); }
+    if (st.x + st.radius > SUB_ARENA_W) { st.x = SUB_ARENA_W - st.radius; st.vx = -Math.abs(st.vx); }
+    if (st.y - st.radius < 50) { st.y = 50 + st.radius; st.vy = Math.abs(st.vy); }
+    if (st.y + st.radius > SUB_GROUND_Y - 30) { st.y = SUB_GROUND_Y - 30 - st.radius; st.vy = -Math.abs(st.vy); }
+  }
 
   // Squirrels: throw nuts horizontally
   for (const sq of subSquirrels) {
@@ -2674,11 +2683,17 @@ function updateFlowerSublevel() {
     }
   }
 
-  // Catch star
+  // Catch stars (need all)
   const pcx = player.x + PW / 2;
   const pcy = player.y + PH / 2;
-  if (Math.abs(pcx - subStar.x) < PW / 2 + subStar.radius && Math.abs(pcy - subStar.y) < PH / 2 + subStar.radius) {
-    exitFlowerSublevel();
+  for (let i = subStars.length - 1; i >= 0; i--) {
+    const st = subStars[i];
+    if (Math.abs(pcx - st.x) < PW / 2 + st.radius && Math.abs(pcy - st.y) < PH / 2 + st.radius) {
+      subStars.splice(i, 1);
+      if (subStars.length === 0) exitFlowerSublevel();
+      else if (audioCtx) tone(659, 0.09, 'sine', 0.1);
+      break;
+    }
   }
 }
 
@@ -2700,32 +2715,35 @@ function drawFlowerSublevel() {
     ctx.lineTo(gx + 8, SUB_GROUND_Y);
     ctx.fill();
   }
-  // Star (5-pointed star shape)
-  ctx.save();
-  const starGlow = 0.4 + 0.25 * Math.sin(frameCount * 0.1);
-  ctx.fillStyle = `rgba(255, 230, 80, ${starGlow})`;
-  ctx.beginPath();
-  const R = subStar.radius + 4;
-  const r = subStar.radius * 0.45;
-  for (let i = 0; i < 10; i++) {
-    const a = (i * Math.PI / 5) - Math.PI / 2;
-    const rad = i % 2 === 0 ? R : r;
-    const px = subStar.x + Math.cos(a) * rad;
-    const py = subStar.y + Math.sin(a) * rad;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
+  // Stars (5-pointed star shapes)
+  for (let si = 0; si < subStars.length; si++) {
+    const subStar = subStars[si];
+    ctx.save();
+    const starGlow = 0.4 + 0.25 * Math.sin(frameCount * 0.1 + si * 0.7);
+    ctx.fillStyle = `rgba(255, 230, 80, ${starGlow})`;
+    ctx.beginPath();
+    const R = subStar.radius + 4;
+    const r = subStar.radius * 0.45;
+    for (let i = 0; i < 10; i++) {
+      const a = (i * Math.PI / 5) - Math.PI / 2;
+      const rad = i % 2 === 0 ? R : r;
+      const px = subStar.x + Math.cos(a) * rad;
+      const py = subStar.y + Math.sin(a) * rad;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#ffeb3b';
+    ctx.strokeStyle = '#e6c200';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath();
+    ctx.arc(subStar.x - 3, subStar.y - 3, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#ffeb3b';
-  ctx.strokeStyle = '#e6c200';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.beginPath();
-  ctx.arc(subStar.x - 3, subStar.y - 3, 3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
   // Monsters (monster look: horns, teeth, angry eyes)
   for (const m of subMonsters) {
     if (!m.alive) continue;
@@ -2828,7 +2846,10 @@ function drawFlowerSublevel() {
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
   ctx.font = '13px "Segoe UI", system-ui, sans-serif';
-  ctx.fillText('Catch the star! Jump on monsters. Squirrels throw nuts.', SUB_ARENA_W / 2, 28);
+  const starHud = subStars.length > 0
+    ? `${subStars.length} star${subStars.length === 1 ? '' : 's'} left (catch ${SUB_FLOWER_STAR_COUNT}) · `
+    : '';
+  ctx.fillText(`${starHud}Jump monsters · Dodge nuts`, SUB_ARENA_W / 2, 28);
 
   // Start countdown / well done overlays (draw on top)
   if (subStartCountdownFrames > 0) {
@@ -3431,7 +3452,7 @@ function doStartBananaSublevel(flowerIndex) {
   bananaMonkeyFacing = 1;
   bananaFalling = [];
   bananaGroundPile = [];
-  bananaSpawnTimer = 34;
+  bananaSpawnTimer = 48;
   bananaCaught = 0;
   bananaMissed = 0;
   gameState = 'banana_sublevel';
@@ -3503,8 +3524,8 @@ function updateBananaSublevel() {
   const leftHeld = !!(keys.ArrowLeft || keys.KeyA);
   const rightHeld = !!(keys.ArrowRight || keys.KeyD);
   const move = (leftHeld ? -1 : 0) + (rightHeld ? 1 : 0);
-  const accel = 0.62;
-  const maxSpeed = 6.4;
+  const accel = 0.92;
+  const maxSpeed = 8.6;
   if (move !== 0) {
     bananaMonkeyVX += move * accel;
     bananaMonkeyFacing = move < 0 ? -1 : 1;
@@ -3517,7 +3538,7 @@ function updateBananaSublevel() {
 
   bananaSpawnTimer--;
   if (bananaSpawnTimer <= 0) {
-    bananaSpawnTimer = 18 + Math.floor(Math.random() * 24);
+    bananaSpawnTimer = 32 + Math.floor(Math.random() * 38);
     bananaFalling.push({
       x: 24 + Math.random() * (W - 48),
       y: -18 - Math.random() * 40,
@@ -3531,7 +3552,7 @@ function updateBananaSublevel() {
   for (let i = bananaFalling.length - 1; i >= 0; i--) {
     const b = bananaFalling[i];
     b.y += b.vy;
-    b.vy = Math.min(4.3, b.vy + 0.017);
+    b.vy = Math.min(3.55, b.vy + 0.013);
     b.rot += b.vr;
     const dx = Math.abs(b.x - bananaMonkeyX);
     const inCatchBand = b.y > catchY - 14 && b.y < catchY + 24;
