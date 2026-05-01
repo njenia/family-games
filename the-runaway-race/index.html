@@ -1013,10 +1013,17 @@ const BANANA_SPEED_MAX = 2.05;
 const BANANA_MISS_LIMIT = 5;
 const BANANA_TARGET_CATCH = 5;
 
-// Boss fight (after finish line) — Bowser-like turtle, infinite bones
+// Boss fight (after finish line) — Bowser-like turtle, finite bones + supply drops
 let bossSavedX = 0, bossSavedY = 0, bossSavedCameraX = 0;
 let bowserBoss = null; // boss state: hp, movement AI, shoot phases, scary SFX cd
 let bossFireballs = [];
+let bossBonePackages = []; // { x, y, vy, bonus }
+let bossBonePackageSpawnTimer = 0;
+const BOSS_BONE_PACKAGE_SPAWN_MIN_FRAMES = 220;
+const BOSS_BONE_PACKAGE_SPAWN_MAX_FRAMES = 500;
+const BOSS_PACKAGE_FALL_W = 38;
+const BOSS_PACKAGE_FALL_H = 32;
+const BOSS_ENTER_MIN_BONES = 14;
 
 // Tower climb sublevel (Icy Tower style)
 let towerFlowerIndex = -1;
@@ -4431,7 +4438,7 @@ function doCompleteLevel() {
   sndLevelComplete();
 }
 
-// ----- Boss sublevel (scary turtle — throw bones, infinite ammo) -----
+// ----- Boss sublevel (scary turtle — finite bones, supply crates from sky) -----
 function startBossSublevel() {
   if (gameState !== 'playing' || fadeTransition.active) return;
   beginFadeTransition(() => doStartBossSublevel(), 10, 10);
@@ -4444,6 +4451,9 @@ function doStartBossSublevel() {
   thrownBones = [];
   landedBones = [];
   bossFireballs = [];
+  bossBonePackages = [];
+  bossBonePackageSpawnTimer = 150 + Math.floor(Math.random() * 120);
+  if (boneAmmo < BOSS_ENTER_MIN_BONES) boneAmmo = BOSS_ENTER_MIN_BONES;
   subStartCountdownFrames = SUB_START_COUNTDOWN_FRAMES;
   subWellDoneTimerFrames = 0;
   subWellDonePending = null;
@@ -4475,6 +4485,7 @@ function doStartBossSublevel() {
 function doCompleteBossWin() {
   bowserBoss = null;
   bossFireballs = [];
+  bossBonePackages = [];
   thrownBones = [];
   landedBones = [];
   cameraX = bossSavedCameraX;
@@ -4491,6 +4502,7 @@ function doExitBossFailed() {
   const lvl = LEVELS[currentLevel];
   bowserBoss = null;
   bossFireballs = [];
+  bossBonePackages = [];
   thrownBones = [];
   landedBones = [];
   player.x = Math.max(40, Math.min(bossSavedX - 140, (lvl && lvl.finishX) ? lvl.finishX - 110 : bossSavedX - 140));
@@ -4510,7 +4522,8 @@ function exitBossFailed() {
 
 function updateBonesForBossFight() {
   const spaceDown = !!(keys.Space);
-  if (spaceDown && !boneThrowKeyWasDown && gameState === 'boss_sublevel') {
+  if (spaceDown && !boneThrowKeyWasDown && boneAmmo > 0 && gameState === 'boss_sublevel') {
+    boneAmmo--;
     const startX = player.x + PW / 2;
     const startY = player.y + PH / 2;
     const dir = player.facing;
@@ -4552,6 +4565,7 @@ function updateBonesForBossFight() {
 }
 
 function updateBossSublevel() {
+  updatePresentMsg();
   if (subHurtTimer > 0) subHurtTimer--;
 
   if (subStartCountdownFrames > 0) {
@@ -4571,6 +4585,46 @@ function updateBossSublevel() {
   if (!bowserBoss) return;
 
   updateBonesForBossFight();
+
+  for (let i = landedBones.length - 1; i >= 0; i--) {
+    const lb = landedBones[i];
+    const dx = Math.abs(player.x + PW / 2 - lb.x);
+    const dy = Math.abs(player.y + PH - lb.y);
+    if (dx < 24 && dy < 30) {
+      landedBones.splice(i, 1);
+      boneAmmo++;
+      if (audioCtx) tone(500, 0.04, 'sine', 0.06);
+    }
+  }
+
+  bossBonePackageSpawnTimer--;
+  if (bossBonePackageSpawnTimer <= 0) {
+    bossBonePackageSpawnTimer = BOSS_BONE_PACKAGE_SPAWN_MIN_FRAMES +
+      Math.floor(Math.random() * (BOSS_BONE_PACKAGE_SPAWN_MAX_FRAMES - BOSS_BONE_PACKAGE_SPAWN_MIN_FRAMES));
+    bossBonePackages.push({
+      x: BOSS_PACKAGE_FALL_W + Math.random() * (SUB_ARENA_W - BOSS_PACKAGE_FALL_W * 2),
+      y: -BOSS_PACKAGE_FALL_H,
+      vy: 2.1 + Math.random() * 2,
+      bonus: Math.random() < 0.5 ? 10 : 15
+    });
+  }
+  const pkgHalfW = BOSS_PACKAGE_FALL_W / 2;
+  const pkgHalfH = BOSS_PACKAGE_FALL_H / 2;
+  const pcx = player.x + PW / 2;
+  const pcy = player.y + PH / 2;
+  for (let i = bossBonePackages.length - 1; i >= 0; i--) {
+    const p = bossBonePackages[i];
+    p.y += p.vy;
+    if (Math.abs(pcx - p.x) < PW / 2 + pkgHalfW && Math.abs(pcy - p.y) < PH / 2 + pkgHalfH) {
+      boneAmmo += p.bonus;
+      bossBonePackages.splice(i, 1);
+      presentMsgText = '📦 +' + p.bonus + ' bones!';
+      presentMsgTimer = 100;
+      if (audioCtx) tone(523, 0.09, 'sine', 0.11);
+      continue;
+    }
+    if (p.y > SUB_GROUND_Y + 40) bossBonePackages.splice(i, 1);
+  }
 
   // Player move (arena)
   player.vx = 0;
@@ -4804,7 +4858,7 @@ function drawBowserBoss() {
   ctx.fillStyle = '#fff';
   ctx.font = '12px system-ui,sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('Defeat the scary turtle!  Space = bones (∞) · Jump on head to stomp', SUB_ARENA_W / 2, 40);
+  ctx.fillText('Defeat the turtle! Catch 📦 drops (+10/+15 bones). Space throws · Stomp head', SUB_ARENA_W / 2, 40);
   ctx.textAlign = 'start';
 }
 
@@ -4822,6 +4876,29 @@ function drawBossSublevel() {
     ctx.fillRect(gx, SUB_GROUND_Y, 2, 8);
   }
   drawBowserBoss();
+  for (const pkg of bossBonePackages) {
+    const px = pkg.x - BOSS_PACKAGE_FALL_W / 2;
+    const py = pkg.y - BOSS_PACKAGE_FALL_H / 2;
+    ctx.fillStyle = '#8B6914';
+    ctx.strokeStyle = '#5c440a';
+    ctx.lineWidth = 2;
+    roundRect(px, py, BOSS_PACKAGE_FALL_W, BOSS_PACKAGE_FALL_H, 6, true, true);
+    ctx.strokeStyle = '#c0392b';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(pkg.x - BOSS_PACKAGE_FALL_W / 2 + 4, pkg.y);
+    ctx.lineTo(pkg.x + BOSS_PACKAGE_FALL_W / 2 - 4, pkg.y);
+    ctx.moveTo(pkg.x, pkg.y - BOSS_PACKAGE_FALL_H / 2 + 4);
+    ctx.lineTo(pkg.x, pkg.y + BOSS_PACKAGE_FALL_H / 2 - 4);
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('+' + pkg.bonus, pkg.x, pkg.y);
+    ctx.textAlign = 'start';
+    ctx.textBaseline = 'alphabetic';
+  }
   for (const f of bossFireballs) {
     const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r);
     g.addColorStop(0, '#fff7a0');
@@ -4862,8 +4939,9 @@ function drawBossSublevel() {
   ctx.fillText(hStr || '0', 12, 28);
   ctx.fillStyle = '#7efaff';
   ctx.textAlign = 'right';
-  ctx.fillText('Bones: ∞', SUB_ARENA_W - 12, 28);
+  ctx.fillText('🦴 ' + boneAmmo, SUB_ARENA_W - 12, 28);
   ctx.textAlign = 'start';
+  drawPresentMsg();
   if (subStartCountdownFrames > 0) {
     const sec = Math.ceil(subStartCountdownFrames / 60);
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
