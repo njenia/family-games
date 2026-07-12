@@ -1,0 +1,1789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gabby's Physio Adventure</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg1: #2b1055;
+    --bg2: #7597de;
+    --accent: #ffd700;
+    --go: #4ade80;
+    --rest: #60a5fa;
+    --phase2: #f472b6;
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(160deg, var(--bg1), var(--bg2));
+    color: #fff;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  #app {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .screen { display: none; flex-direction: column; align-items: center; gap: 18px; width: 100%; max-width: 460px; }
+  .screen.active { display: flex; }
+
+  h1 {
+    font-size: clamp(1.7rem, 6vw, 2.6rem);
+    color: var(--accent);
+    text-shadow: 3px 3px 0 rgba(0,0,0,0.3);
+    letter-spacing: 1px;
+  }
+
+  .subtitle { color: rgba(255,255,255,0.85); font-size: 1.05rem; line-height: 1.5; }
+  .error { color: #fecaca; max-width: 360px; }
+
+  button.big {
+    font-size: 1.4rem;
+    font-weight: 700;
+    padding: 18px 46px;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    color: #2b1055;
+    background: linear-gradient(180deg, #ffe45c, #ffb703);
+    box-shadow: 0 6px 0 #b45309, 0 10px 24px rgba(0,0,0,0.35);
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  button.big:active { transform: translateY(4px); box-shadow: 0 2px 0 #b45309, 0 6px 14px rgba(0,0,0,0.35); }
+  button.big:disabled { opacity: 0.5; cursor: wait; }
+
+  button.ghost {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.35);
+    color: #fff;
+    padding: 10px 22px;
+    border-radius: 999px;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  button.ghost:hover { background: rgba(255,255,255,0.22); }
+
+  .exercise-progress {
+    display: flex;
+    gap: 5px;
+    flex-wrap: nowrap;
+    justify-content: center;
+    width: 100%;
+  }
+  .exercise-progress .ex-dot {
+    width: 26px; height: 26px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.18);
+    border: 2px solid rgba(255,255,255,0.35);
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+    color: rgba(255,255,255,0.8);
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .exercise-progress .ex-dot:hover { border-color: #fff; transform: scale(1.12); }
+  .exercise-progress .ex-dot.done { background: var(--go); border-color: var(--go); color: #14532d; }
+  .exercise-progress .ex-dot.current { background: var(--accent); border-color: #fff; color: #2b1055; transform: scale(1.2); font-weight: 700; }
+
+  #exercise-visual {
+    width: clamp(88px, 24vw, 120px);
+    height: clamp(88px, 24vw, 120px);
+    border-radius: 24px;
+    overflow: hidden;
+    border: 3px solid rgba(255,215,0,0.55);
+    background: rgba(255,255,255,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(2.6rem, 12vw, 3.8rem);
+    animation: bob 2s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+  #exercise-visual img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  #exercise-visual.hidden { display: none; }
+
+  #exercise-video {
+    display: none;
+    width: min(86.4vw, 384px);
+    max-height: min(43.2vh, 312px);
+    border-radius: 18px;
+    border: 3px solid rgba(255,215,0,0.45);
+    background: #000;
+    object-fit: contain;
+  }
+  #exercise-video.active { display: block; }
+  @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+  #exercise-name {
+    font-size: clamp(1.3rem, 5.5vw, 1.9rem);
+    font-weight: 700;
+    color: var(--accent);
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+  }
+
+  #ring-wrap { position: relative; width: min(58vw, 240px); aspect-ratio: 1; }
+  #ring-wrap.hidden { display: none; }
+  #ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  #ring-track { fill: none; stroke: rgba(255,255,255,0.15); stroke-width: 12; }
+  #ring-fill {
+    fill: none;
+    stroke: var(--go);
+    stroke-width: 12;
+    stroke-linecap: round;
+    transition: stroke 0.3s ease;
+  }
+  #ring-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 2px;
+  }
+  #phase-label {
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  #phase-label.go { color: var(--go); }
+  #phase-label.rest { color: var(--rest); }
+  #phase-label.alt { color: var(--phase2); }
+  #countdown { font-size: clamp(3rem, 16vw, 4.6rem); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+
+  /* count mode */
+  #count-panel {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+  }
+  #count-panel.active { display: flex; }
+  #count-meta {
+    font-size: 0.95rem;
+    color: rgba(255,255,255,0.8);
+  }
+  #count-display {
+    font-size: clamp(3.2rem, 18vw, 5rem);
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  #count-display span { color: rgba(255,255,255,0.45); font-size: 0.55em; }
+  #count-direction {
+    font-size: clamp(1.2rem, 5vw, 1.6rem);
+    font-weight: 700;
+    color: var(--accent);
+  }
+  #btn-count {
+    font-size: 1.25rem;
+    font-weight: 700;
+    padding: 16px 36px;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    color: #14532d;
+    background: linear-gradient(180deg, #86efac, #22c55e);
+    box-shadow: 0 6px 0 #166534, 0 10px 24px rgba(0,0,0,0.35);
+  }
+  #btn-count:active { transform: translateY(4px); box-shadow: 0 2px 0 #166534, 0 6px 14px rgba(0,0,0,0.35); }
+
+  #rep-dots {
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+    flex-wrap: nowrap;
+    width: 100%;
+    max-width: 100%;
+  }
+  #rep-dots.hidden { display: none; }
+  #rep-dots .rep {
+    width: 24px; height: 24px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    border: 2px solid rgba(255,255,255,0.4);
+    transition: transform 0.2s ease, background 0.2s ease;
+    color: rgba(255,255,255,0.85);
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #rep-dots .rep:hover { border-color: #fff; transform: scale(1.15); }
+  #rep-dots .rep.done { background: var(--accent); border-color: var(--accent); color: #2b1055; }
+  #rep-dots .rep.active { transform: scale(1.35); border-color: #fff; background: var(--go); color: #14532d; }
+
+  #controls { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  #controls-between { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+  #celebration {
+    position: fixed; inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 50;
+    background: rgba(15, 8, 40, 0.55);
+    backdrop-filter: blur(3px);
+    text-align: center;
+    padding: 20px;
+  }
+  #celebration.active { display: flex; }
+  #celebration h2 {
+    font-size: clamp(1.9rem, 8vw, 3rem);
+    color: var(--accent);
+    text-shadow: 3px 3px 0 rgba(0,0,0,0.4);
+    animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 2;
+  }
+  #celebration p { font-size: 1.2rem; color: #fff; z-index: 2; }
+  @keyframes pop-in { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+
+  #fx-canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 40; }
+
+  #dance-row { display: flex; gap: 14px; font-size: clamp(2.2rem, 10vw, 3.4rem); z-index: 2; }
+  #dance-row span { display: inline-block; animation: dance 0.6s ease-in-out infinite alternate; }
+  #dance-row span:nth-child(2) { animation-delay: 0.15s; }
+  #dance-row span:nth-child(3) { animation-delay: 0.3s; }
+  #dance-row span:nth-child(4) { animation-delay: 0.45s; }
+  #dance-row span:nth-child(5) { animation-delay: 0.6s; }
+  @keyframes dance {
+    0%   { transform: translateY(0) rotate(-12deg) scale(1); }
+    100% { transform: translateY(-22px) rotate(12deg) scale(1.15); }
+  }
+
+  #bonus-video {
+    display: none;
+    z-index: 2;
+    width: min(72vw, 300px);
+    max-height: min(32vh, 220px);
+    border-radius: 16px;
+    border: 3px solid rgba(255,215,0,0.55);
+    background: #000;
+    object-fit: contain;
+  }
+  #bonus-video.active { display: block; }
+
+  @keyframes flash { 0% { opacity: 0.55; } 100% { opacity: 0; } }
+  #flash {
+    position: fixed; inset: 0;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 30;
+  }
+  #flash.zap { animation: flash 0.35s ease-out; }
+
+  .pulse { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+
+  #trophy { font-size: clamp(4rem, 22vw, 7rem); animation: bob 1.6s ease-in-out infinite; }
+
+  .gabby-face {
+    width: clamp(90px, 26vw, 130px);
+    height: clamp(90px, 26vw, 130px);
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid var(--accent);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    background: #fff;
+  }
+  #face-start { animation: bob 2s ease-in-out infinite; }
+  #face-celebrate {
+    z-index: 2;
+    animation: wiggle 0.5s ease-in-out infinite alternate;
+  }
+  @keyframes wiggle {
+    0%   { transform: rotate(-14deg) scale(1); }
+    100% { transform: rotate(14deg) scale(1.15); }
+  }
+  #face-finish { animation: spin-bounce 1.6s ease-in-out infinite; }
+  @keyframes spin-bounce {
+    0%,100% { transform: translateY(0) rotate(-8deg); }
+    50%     { transform: translateY(-18px) rotate(8deg); }
+  }
+
+  /* between-exercise countdown */
+  #between-visual {
+    width: clamp(100px, 28vw, 140px);
+    height: clamp(100px, 28vw, 140px);
+    border-radius: 28px;
+    overflow: hidden;
+    border: 3px solid rgba(255,215,0,0.55);
+    background: rgba(255,255,255,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(3rem, 14vw, 4.2rem);
+    animation: bob 2s ease-in-out infinite;
+  }
+  #between-visual img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #between-visual.hidden { display: none; }
+  #between-video {
+    display: none;
+    width: min(72vw, 320px);
+    max-height: min(36vh, 260px);
+    border-radius: 18px;
+    border: 3px solid rgba(255,215,0,0.45);
+    background: #000;
+    object-fit: contain;
+  }
+  #between-video.active { display: block; }
+  #between-name {
+    font-size: clamp(1.4rem, 6vw, 2rem);
+    font-weight: 700;
+    color: var(--accent);
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+  }
+  #between-hint { color: rgba(255,255,255,0.8); font-size: 0.95rem; max-width: 26em; line-height: 1.4; }
+  #between-count {
+    font-size: clamp(4rem, 20vw, 6rem);
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+    text-shadow: 0 0 24px rgba(96,165,250,0.55);
+  }
+  #between-label {
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--rest);
+  }
+</style>
+</head>
+<body>
+<canvas id="fx-canvas"></canvas>
+<div id="flash"></div>
+
+<div id="app">
+
+  <section id="screen-start" class="screen active">
+    <img id="face-start" class="gabby-face" src="gabby.png" alt="Gabby">
+    <h1 id="app-title">Gabby's Physio Adventure</h1>
+    <p class="subtitle" id="start-blurb">Loading exercises…</p>
+    <p class="error" id="load-error" hidden></p>
+    <button class="big" id="btn-start" disabled>Let's Go!</button>
+  </section>
+
+  <section id="screen-workout" class="screen">
+    <div class="exercise-progress"></div>
+    <div id="exercise-name">Exercise</div>
+    <div id="exercise-visual">💪</div>
+    <video id="exercise-video" playsinline muted></video>
+
+    <div id="ring-wrap">
+      <svg viewBox="0 0 120 120">
+        <circle id="ring-track" cx="60" cy="60" r="52"></circle>
+        <circle id="ring-fill" cx="60" cy="60" r="52"></circle>
+      </svg>
+      <div id="ring-center">
+        <div id="phase-label" class="go">Go!</div>
+        <div id="countdown">5</div>
+      </div>
+    </div>
+
+    <div id="count-panel">
+      <div id="count-meta">Set 1 of 2</div>
+      <div id="count-direction">Clockwise</div>
+      <div id="count-display">0 <span>/ 10</span></div>
+      <button id="btn-count" type="button">✓ Did one rotation</button>
+    </div>
+
+    <div id="rep-dots"></div>
+
+    <div id="controls">
+      <button class="ghost" id="btn-pause">⏸ Pause</button>
+      <button class="ghost" id="btn-skip">⏭ Skip exercise</button>
+    </div>
+  </section>
+
+  <section id="screen-between" class="screen">
+    <div class="exercise-progress"></div>
+    <div id="between-label">Up next</div>
+    <div id="between-visual">💪</div>
+    <video id="between-video" playsinline muted></video>
+    <div id="between-name">Next exercise</div>
+    <div id="between-hint"></div>
+    <div id="between-count">8</div>
+    <p class="subtitle">Get ready…</p>
+    <div id="controls-between">
+      <button class="ghost" id="btn-pause-between">⏸ Pause</button>
+      <button class="ghost" id="btn-skip-between">⏭ Start now</button>
+    </div>
+  </section>
+
+  <section id="screen-finish" class="screen">
+    <div id="trophy">🏆</div>
+    <img id="face-finish" class="gabby-face" src="gabby.png" alt="Gabby">
+    <h1>You did it, Gabby!</h1>
+    <p class="subtitle" id="finish-blurb">All exercises complete!</p>
+    <button class="big" id="btn-restart">Play Again</button>
+  </section>
+</div>
+
+<div id="celebration">
+  <h2 id="celebration-title">Amazing!</h2>
+  <img id="face-celebrate" class="gabby-face" src="gabby.png" alt="Gabby">
+  <div id="dance-row"></div>
+  <video id="bonus-video" playsinline muted></video>
+  <p id="celebration-sub">Get ready for the next one…</p>
+</div>
+
+<script src="exercises.js"></script>
+<script>
+'use strict';
+
+const CHEERS = ['Amazing!', 'Fantastic!', 'Super Star!', 'Wowza!', 'Incredible!', 'You Rock!', 'Brilliant!', 'Champion!', 'Unstoppable!', 'Legendary!'];
+const DANCE_EMOJIS = ['🎉','🥳','🌟','🦄','🐸','🎈','🍭','🐱','🚀','🌈','🐶','✨','🍦','🤖','🦖'];
+
+let CONFIG = null;
+let EXERCISES = [];
+
+/* ============================== audio ============================== */
+let audioCtx = null;
+function ctx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function tone(freq, start, dur, { type = 'sine', vol = 0.25, slideTo = null } = {}) {
+  const ac = ctx();
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.type = type;
+  const t0 = ac.currentTime + start;
+  osc.frequency.setValueAtTime(freq, t0);
+  if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+  gain.gain.setValueAtTime(0, t0);
+  gain.gain.linearRampToValueAtTime(vol, t0 + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  osc.connect(gain).connect(ac.destination);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.05);
+}
+
+const sounds = {
+  tick()      { tone(880, 0, 0.08, { type: 'square', vol: 0.08 }); },
+  goBeep()    { tone(523, 0, 0.12, { vol: 0.3 }); tone(784, 0.12, 0.2, { vol: 0.3 }); },
+  restBeep()  { tone(392, 0, 0.25, { vol: 0.25 }); },
+  repDone()   { tone(660, 0, 0.1, { vol: 0.3 }); tone(880, 0.1, 0.15, { vol: 0.3 }); },
+  fanfare() {
+    [523, 523, 523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.13, 0.18, { type: 'triangle', vol: 0.3 }));
+  },
+  sparkle() {
+    for (let i = 0; i < 12; i++) tone(800 + Math.random() * 1600, i * 0.09, 0.15, { type: 'sine', vol: 0.18 });
+  },
+  slideWhistle() {
+    tone(400, 0, 0.5, { type: 'sine', vol: 0.25, slideTo: 1200 });
+    tone(1200, 0.55, 0.5, { type: 'sine', vol: 0.25, slideTo: 500 });
+    tone(500, 1.15, 0.4, { type: 'sine', vol: 0.25, slideTo: 1400 });
+  },
+  boings() {
+    [0, 0.3, 0.6, 0.9, 1.2].forEach(t => tone(150 + Math.random() * 100, t, 0.25, { type: 'sawtooth', vol: 0.15, slideTo: 500 + Math.random() * 300 }));
+  },
+  melody() {
+    const notes = [523, 587, 659, 698, 784, 880, 988, 1047];
+    notes.forEach((f, i) => tone(f, i * 0.11, 0.16, { type: 'triangle', vol: 0.28 }));
+  },
+  finale() {
+    const notes = [523, 659, 784, 1047, 784, 1047, 1319, 1568];
+    notes.forEach((f, i) => tone(f, i * 0.16, 0.3, { type: 'triangle', vol: 0.3 }));
+  },
+};
+
+/* ============================== workout music ============================== */
+// Add more files here — one is picked at random each time work starts
+const WORK_TRACKS = [
+  'audio/strong1.m4a',
+  'audio/strong2.m4a',
+  'audio/strong3.m4a',
+];
+const REST_TRACK = 'audio/rest.m4a';
+
+const music = {
+  mode: null, // 'work' | 'rest' | null
+  muted: false,
+  workAudio: null,
+  restAudio: null,
+  lastWorkTrack: null,
+
+  /** @param {'work'|'rest'|null} mode */
+  set(mode) {
+    // Work always starts a fresh one-shot, even mid-exercise between reps
+    if (mode === 'work') {
+      this._stopAllAudio();
+      this.mode = 'work';
+      this._startWorkTrack();
+      return;
+    }
+
+    if (mode === this.mode) return;
+
+    this._stopAllAudio();
+    this.mode = mode;
+    if (!mode) return;
+    this._startRestTrack();
+  },
+
+  stop() {
+    this._stopAllAudio();
+    this.mode = null;
+  },
+
+  pause() {
+    this.muted = true;
+    if (this.workAudio && !this.workAudio.paused) this.workAudio.pause();
+    if (this.restAudio && !this.restAudio.paused) this.restAudio.pause();
+  },
+
+  resume() {
+    this.muted = false;
+    // One-shot clips — only resume if they haven't finished yet
+    if (this.mode === 'work' && this.workAudio && !this.workAudio.ended) {
+      this.workAudio.play().catch(() => {});
+    }
+    if (this.mode === 'rest' && this.restAudio && !this.restAudio.ended) {
+      this.restAudio.play().catch(() => {});
+    }
+  },
+
+  _pickWorkTrack() {
+    if (WORK_TRACKS.length === 0) return null;
+    if (WORK_TRACKS.length === 1) return WORK_TRACKS[0];
+    let track;
+    do {
+      track = WORK_TRACKS[Math.floor(Math.random() * WORK_TRACKS.length)];
+    } while (track === this.lastWorkTrack && WORK_TRACKS.length > 1);
+    return track;
+  },
+
+  _startWorkTrack() {
+    const track = this._pickWorkTrack();
+    if (!track) return;
+    this.lastWorkTrack = track;
+    const audio = new Audio(track);
+    audio.loop = false;
+    audio.volume = 0.55;
+    this.workAudio = audio;
+    if (!this.muted) audio.play().catch(() => {});
+  },
+
+  _startRestTrack() {
+    const audio = new Audio(REST_TRACK);
+    audio.loop = false;
+    audio.volume = 0.55;
+    this.restAudio = audio;
+    if (!this.muted) audio.play().catch(() => {});
+  },
+
+  _stopAllAudio() {
+    if (this.workAudio) {
+      this.workAudio.pause();
+      this.workAudio.src = '';
+      this.workAudio = null;
+    }
+    if (this.restAudio) {
+      this.restAudio.pause();
+      this.restAudio.src = '';
+      this.restAudio = null;
+    }
+  },
+};
+
+function setWorkoutMusic(kind) {
+  // kind: 'work' | 'rest' | null
+  music.set(kind);
+}
+
+/* ============================== fx canvas ============================== */
+const canvas = document.getElementById('fx-canvas');
+const fx = canvas.getContext('2d');
+let particles = [];
+let fxRunning = false;
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth * devicePixelRatio;
+  canvas.height = window.innerHeight * devicePixelRatio;
+  fx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+const W = () => window.innerWidth;
+const H = () => window.innerHeight;
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const COLORS = ['#ffd700', '#ff6b6b', '#4ade80', '#60a5fa', '#c084fc', '#fb923c', '#f472b6', '#2dd4bf'];
+
+function fxLoop() {
+  if (!fxRunning) { fx.clearRect(0, 0, W(), H()); return; }
+  fx.clearRect(0, 0, W(), H());
+  particles = particles.filter(p => p.life > 0);
+  for (const p of particles) {
+    p.update(p);
+    p.draw(fx, p);
+    p.life -= 1;
+  }
+  if (particles.length === 0) { fxRunning = false; fx.clearRect(0, 0, W(), H()); return; }
+  requestAnimationFrame(fxLoop);
+}
+function startFx() {
+  if (!fxRunning) { fxRunning = true; requestAnimationFrame(fxLoop); }
+}
+
+function confettiBurst() {
+  for (let i = 0; i < 160; i++) {
+    particles.push({
+      x: rand(0, W()), y: rand(-H() * 0.3, 0),
+      vx: rand(-1.5, 1.5), vy: rand(2, 5),
+      w: rand(6, 12), h: rand(8, 16), rot: rand(0, Math.PI * 2), vr: rand(-0.2, 0.2),
+      color: pick(COLORS), life: rand(150, 280),
+      update(p) { p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.vy += 0.03; },
+      draw(c, p) {
+        c.save(); c.translate(p.x, p.y); c.rotate(p.rot);
+        c.fillStyle = p.color; c.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        c.restore();
+      },
+    });
+  }
+}
+
+function fireworks() {
+  for (let burst = 0; burst < 5; burst++) {
+    const cx = rand(W() * 0.2, W() * 0.8);
+    const cy = rand(H() * 0.15, H() * 0.5);
+    const color = pick(COLORS);
+    const delay = burst * 22;
+    for (let i = 0; i < 70; i++) {
+      const angle = (i / 70) * Math.PI * 2;
+      const speed = rand(2, 6);
+      particles.push({
+        x: cx, y: cy,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        color, life: rand(60, 110) + delay, delay,
+        update(p) {
+          if (p.delay > 0) { p.delay--; return; }
+          p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.vx *= 0.985; p.vy *= 0.985;
+        },
+        draw(c, p) {
+          if (p.delay > 0) return;
+          c.globalAlpha = Math.min(1, p.life / 50);
+          c.fillStyle = p.color;
+          c.beginPath(); c.arc(p.x, p.y, 3, 0, Math.PI * 2); c.fill();
+          c.globalAlpha = 1;
+        },
+      });
+    }
+  }
+}
+
+function emojiRain() {
+  const set = [pick(DANCE_EMOJIS), pick(DANCE_EMOJIS), pick(DANCE_EMOJIS)];
+  for (let i = 0; i < 45; i++) {
+    particles.push({
+      x: rand(0, W()), y: rand(-H(), -20),
+      vy: rand(2.5, 5.5), size: rand(24, 46), emoji: pick(set),
+      wob: rand(0, Math.PI * 2), life: 300,
+      update(p) { p.y += p.vy; p.wob += 0.05; p.x += Math.sin(p.wob) * 1.5; if (p.y > H() + 50) p.life = 0; },
+      draw(c, p) { c.font = p.size + 'px serif'; c.textAlign = 'center'; c.fillText(p.emoji, p.x, p.y); },
+    });
+  }
+}
+
+function starSpiral() {
+  const cx = W() / 2, cy = H() / 2;
+  for (let i = 0; i < 90; i++) {
+    const angle = i * 0.35;
+    particles.push({
+      angle, radius: 5, cx, cy, speed: rand(1.5, 3),
+      color: pick(COLORS), size: rand(8, 18), life: rand(120, 220), delay: i * 2,
+      update(p) {
+        if (p.delay > 0) { p.delay--; return; }
+        p.radius += p.speed; p.angle += 0.04;
+      },
+      draw(c, p) {
+        if (p.delay > 0) return;
+        const x = p.cx + Math.cos(p.angle) * p.radius;
+        const y = p.cy + Math.sin(p.angle) * p.radius;
+        c.globalAlpha = Math.min(1, p.life / 60);
+        c.font = p.size + 'px serif'; c.textAlign = 'center';
+        c.fillText('⭐', x, y);
+        c.globalAlpha = 1;
+      },
+    });
+  }
+}
+
+function balloons() {
+  for (let i = 0; i < 22; i++) {
+    particles.push({
+      x: rand(0, W()), y: H() + rand(20, 300),
+      vy: rand(-1.8, -3.2), color: pick(COLORS), size: rand(22, 40),
+      wob: rand(0, Math.PI * 2), life: 400,
+      update(p) { p.y += p.vy; p.wob += 0.04; p.x += Math.sin(p.wob) * 1.2; if (p.y < -80) p.life = 0; },
+      draw(c, p) {
+        c.strokeStyle = 'rgba(255,255,255,0.5)';
+        c.beginPath(); c.moveTo(p.x, p.y + p.size); c.lineTo(p.x, p.y + p.size + 30); c.stroke();
+        c.fillStyle = p.color;
+        c.beginPath(); c.ellipse(p.x, p.y, p.size * 0.72, p.size, 0, 0, Math.PI * 2); c.fill();
+      },
+    });
+  }
+}
+
+const gabbyImg = new Image();
+gabbyImg.src = 'gabby.png';
+
+function gabbyBounce() {
+  for (let i = 0; i < 8; i++) {
+    const size = rand(60, 120);
+    particles.push({
+      x: rand(size, W() - size), y: rand(size, H() - size),
+      vx: rand(2, 4.5) * (Math.random() < 0.5 ? -1 : 1),
+      vy: rand(2, 4.5) * (Math.random() < 0.5 ? -1 : 1),
+      size, rot: rand(-0.3, 0.3), vr: rand(-0.06, 0.06),
+      life: 300,
+      update(p) {
+        p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+        if (p.x < p.size / 2 || p.x > W() - p.size / 2) { p.vx *= -1; p.vr *= -1; }
+        if (p.y < p.size / 2 || p.y > H() - p.size / 2) { p.vy *= -1; }
+      },
+      draw(c, p) {
+        if (!gabbyImg.complete) return;
+        c.save();
+        c.translate(p.x, p.y);
+        c.rotate(p.rot);
+        c.globalAlpha = Math.min(1, p.life / 40);
+        c.beginPath();
+        c.arc(0, 0, p.size / 2, 0, Math.PI * 2);
+        c.clip();
+        const s = Math.min(gabbyImg.naturalWidth, gabbyImg.naturalHeight);
+        const sx = (gabbyImg.naturalWidth - s) / 2;
+        const sy = (gabbyImg.naturalHeight - s) / 2;
+        c.drawImage(gabbyImg, sx, sy, s, s, -p.size / 2, -p.size / 2, p.size, p.size);
+        c.restore();
+      },
+    });
+  }
+  confettiBurst();
+}
+
+const CELEBRATION_FX = [
+  { fx: confettiBurst, sound: 'fanfare' },
+  { fx: fireworks,     sound: 'sparkle' },
+  { fx: emojiRain,     sound: 'slideWhistle' },
+  { fx: starSpiral,    sound: 'melody' },
+  { fx: balloons,      sound: 'boings' },
+  { fx: gabbyBounce,   sound: 'melody' },
+];
+
+/* ============================== helpers ============================== */
+const $ = id => document.getElementById(id);
+const screens = { start: $('screen-start'), workout: $('screen-workout'), between: $('screen-between'), finish: $('screen-finish') };
+const RING_LEN = 2 * Math.PI * 52;
+$('ring-fill').style.strokeDasharray = RING_LEN;
+
+function currentExercise() {
+  return EXERCISES[state.exercise];
+}
+
+function resolveTiming(ex) {
+  const d = CONFIG.defaults || {};
+  return {
+    reps: ex.reps ?? d.reps ?? 10,
+    workSeconds: ex.workSeconds ?? d.workSeconds ?? 5,
+    restSeconds: ex.restSeconds ?? d.restSeconds ?? 4,
+  };
+}
+
+function setVisual(ex) {
+  const el = $('exercise-visual');
+  el.innerHTML = '';
+  if (ex.picture) {
+    const img = document.createElement('img');
+    img.src = ex.picture;
+    img.alt = ex.name;
+    el.appendChild(img);
+  } else {
+    el.textContent = ex.emoji || '💪';
+  }
+}
+
+function setBetweenVisual(ex) {
+  const el = $('between-visual');
+  el.innerHTML = '';
+  if (ex.picture) {
+    const img = document.createElement('img');
+    img.src = ex.picture;
+    img.alt = ex.name;
+    el.appendChild(img);
+  } else {
+    el.textContent = ex.emoji || '💪';
+  }
+}
+
+function getWorkVideo(ex) {
+  if (!ex) return null;
+  if (ex.mode === 'timed') return (ex.videos && ex.videos.work) || null;
+  if (ex.mode === 'dual') return (ex.phases && ex.phases[0] && ex.phases[0].video) || null;
+  if (ex.mode === 'count') return (ex.sequence && ex.sequence[0] && ex.sequence[0].video) || null;
+  return null;
+}
+
+function stopBetweenVideo() {
+  const v = $('between-video');
+  v.pause();
+  v.removeAttribute('src');
+  delete v.dataset.path;
+  v.load();
+  v.classList.remove('active');
+  $('between-visual').classList.remove('hidden');
+}
+
+function playBetweenPreviewVideo(ex) {
+  const src = getWorkVideo(ex);
+  const v = $('between-video');
+  const emoji = $('between-visual');
+  if (!src) {
+    stopBetweenVideo();
+    setBetweenVisual(ex);
+    return;
+  }
+  setBetweenVisual(ex);
+  emoji.classList.add('hidden');
+  v.classList.add('active');
+  if (v.dataset.path !== src) {
+    v.dataset.path = src;
+    v.src = encodeURI(src);
+  }
+  v.loop = true;
+  v.muted = true;
+  try { v.currentTime = 0; } catch (_) {}
+  const play = () => {
+    if (!state.between || state.paused) return;
+    v.play().catch(() => {});
+  };
+  if (v.readyState >= 2) play();
+  else v.addEventListener('loadeddata', play, { once: true });
+}
+
+/* ---------- demo videos (play once per phase) ---------- */
+function stopDemoVideo() {
+  const v = $('exercise-video');
+  v.pause();
+  v.removeAttribute('src');
+  delete v.dataset.path;
+  v.load();
+  v.classList.remove('active');
+  $('exercise-visual').classList.remove('hidden');
+}
+
+function playDemoVideo(src) {
+  const v = $('exercise-video');
+  const emoji = $('exercise-visual');
+  if (!src) {
+    stopDemoVideo();
+    return;
+  }
+  emoji.classList.add('hidden');
+  v.classList.add('active');
+  if (v.dataset.path !== src) {
+    v.dataset.path = src;
+    v.src = encodeURI(src);
+  }
+  v.loop = false;
+  v.muted = true;
+  try { v.currentTime = 0; } catch (_) {}
+  const play = () => {
+    if (state.paused || state.between) return;
+    v.play().catch(() => {});
+  };
+  if (v.readyState >= 2) play();
+  else v.addEventListener('loadeddata', play, { once: true });
+}
+
+function pauseDemoVideo() {
+  const v = $('exercise-video');
+  if (!v.classList.contains('active')) return;
+  v.pause();
+}
+
+function resumeDemoVideo() {
+  const v = $('exercise-video');
+  if (!v.classList.contains('active') || v.ended) return;
+  v.play().catch(() => {});
+}
+
+function playTimedPhaseVideo(ex, phase) {
+  const vids = ex.videos || {};
+  playDemoVideo(phase === 'work' ? vids.work : vids.rest);
+}
+
+function playDualPhaseVideo(ex) {
+  if (state.phase === 'rest') {
+    playDemoVideo(ex.videos && ex.videos.rest);
+    return;
+  }
+  const p = ex.phases[state.phaseIndex];
+  playDemoVideo(p && p.video);
+}
+
+function playCountStepVideo(ex) {
+  const step = (ex.sequence || [])[state.seqIndex];
+  playDemoVideo(step && step.video);
+}
+
+function stopBonusVideo() {
+  const v = $('bonus-video');
+  v.pause();
+  v.removeAttribute('src');
+  delete v.dataset.path;
+  v.load();
+  v.classList.remove('active');
+  v.onended = null;
+}
+
+/** Play a random bonus clip once. Resolves when it ends (or immediately if none). */
+async function playBonusVideoOnce() {
+  const list = await loadBonusVideos();
+  if (CONFIG) CONFIG.bonusVideos = list;
+  return new Promise((resolve) => {
+    if (!list.length) {
+      stopBonusVideo();
+      resolve();
+      return;
+    }
+    let i;
+    do { i = Math.floor(Math.random() * list.length); } while (i === state.lastBonusIndex && list.length > 1);
+    state.lastBonusIndex = i;
+    const src = list[i];
+    const v = $('bonus-video');
+    v.classList.add('active');
+    v.dataset.path = src;
+    v.src = encodeURI(src);
+    v.loop = false;
+    v.muted = true;
+    try { v.currentTime = 0; } catch (_) {}
+
+    const done = () => {
+      v.onended = null;
+      v.onerror = null;
+      resolve();
+    };
+    v.onended = done;
+    v.onerror = done;
+    const play = () => v.play().catch(done);
+    if (v.readyState >= 2) play();
+    else v.addEventListener('loadeddata', play, { once: true });
+  });
+}
+
+/* ============================== state ============================== */
+const state = {
+  exercise: 0,
+  rep: 0,
+  phase: 'work',       // timed: work|rest ; dual: phase index via phaseIndex + rest
+  phaseIndex: 0,
+  secondsLeft: 5,
+  phaseTotal: 5,
+  timerId: null,
+  paused: false,
+  lastFxIndex: -1,
+  // count mode
+  setIndex: 0,
+  seqIndex: 0,
+  count: 0,
+  // between exercises
+  between: false,
+  betweenLeft: 7,
+  betweenTimerId: null,
+  celebrationTimerId: null,
+  lastBonusIndex: -1,
+};
+
+function showScreen(name) {
+  Object.values(screens).forEach(s => s.classList.remove('active'));
+  screens[name].classList.add('active');
+}
+
+function buildProgressDots() {
+  document.querySelectorAll('.exercise-progress').forEach((wrap) => {
+    wrap.innerHTML = '';
+    EXERCISES.forEach((ex, i) => {
+      const d = document.createElement('button');
+      d.type = 'button';
+      d.className = 'ex-dot';
+      d.textContent = i + 1;
+      d.title = ex.name;
+      d.setAttribute('aria-label', `Jump to exercise ${i + 1}: ${ex.name}`);
+      d.addEventListener('click', () => jumpToExercise(i));
+      wrap.appendChild(d);
+    });
+  });
+  updateProgressHighlight();
+}
+
+function jumpToExercise(index) {
+  if ($('celebration').classList.contains('active')) return;
+  if (index < 0 || index >= EXERCISES.length) return;
+  if (!screens.workout.classList.contains('active') && !screens.between.classList.contains('active')) return;
+
+  if (state.paused) {
+    state.paused = false;
+    music.muted = false;
+    syncPauseButtons();
+  }
+
+  stopTimer();
+  stopBetweenTimer();
+  stopDemoVideo();
+  stopBetweenVideo();
+  stopBonusVideo();
+  setWorkoutMusic(null);
+
+  state.exercise = index;
+  state.rep = 0;
+  state.between = false;
+  updateProgressHighlight();
+  startBetween();
+}
+
+function buildRepDots(n) {
+  const wrap = $('rep-dots');
+  wrap.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement('button');
+    d.type = 'button';
+    d.className = 'rep';
+    d.textContent = String(i + 1);
+    d.title = `Jump to rep ${i + 1}`;
+    d.setAttribute('aria-label', `Jump to repetition ${i + 1}`);
+    d.addEventListener('click', () => jumpToRep(i));
+    wrap.appendChild(d);
+  }
+}
+
+function jumpToRep(repIndex) {
+  if (!screens.workout.classList.contains('active')) return;
+  if ($('celebration').classList.contains('active') || state.between) return;
+  const ex = currentExercise();
+  if (!ex || ex.mode === 'count') return;
+  const t = resolveTiming(ex);
+  if (repIndex < 0 || repIndex >= t.reps) return;
+
+  if (state.paused) {
+    state.paused = false;
+    music.muted = false;
+    syncPauseButtons();
+  }
+
+  state.rep = repIndex;
+  if (ex.mode === 'dual') {
+    state.phase = 'hold';
+    state.phaseIndex = 0;
+    const first = ex.phases[0];
+    state.secondsLeft = first.seconds;
+    state.phaseTotal = first.seconds;
+    renderReps('hold');
+    renderDualPhase();
+    playDualPhaseVideo(ex);
+  } else {
+    state.phase = 'work';
+    state.secondsLeft = t.workSeconds;
+    state.phaseTotal = t.workSeconds;
+    renderReps('work');
+    renderTimer('Go!', 'go', 'var(--go)');
+    playTimedPhaseVideo(ex, 'work');
+  }
+  setWorkoutMusic('work');
+  sounds.goBeep();
+  startTimer();
+}
+
+function updateProgressHighlight() {
+  document.querySelectorAll('.exercise-progress .ex-dot').forEach((d, i) => {
+    d.classList.toggle('done', i < state.exercise);
+    d.classList.toggle('current', i === state.exercise);
+  });
+}
+
+function renderReps(activePhase = 'work') {
+  document.querySelectorAll('#rep-dots .rep').forEach((d, i) => {
+    d.classList.toggle('done', i < state.rep);
+    d.classList.toggle('active', i === state.rep && activePhase !== 'rest');
+  });
+}
+
+function renderTimer(labelText, labelClass, color) {
+  $('countdown').textContent = state.secondsLeft;
+  const label = $('phase-label');
+  label.textContent = labelText;
+  label.className = labelClass;
+  $('ring-fill').style.stroke = color;
+  const frac = state.phaseTotal > 0 ? state.secondsLeft / state.phaseTotal : 0;
+  $('ring-fill').style.strokeDashoffset = RING_LEN * (1 - frac);
+}
+
+function renderCountPanel() {
+  const ex = currentExercise();
+  const sets = ex.sets || 1;
+  const step = (ex.sequence || [])[state.seqIndex];
+  $('count-meta').textContent = `Set ${state.setIndex + 1} of ${sets}`;
+  $('count-direction').textContent = step ? step.label : '';
+  const target = step ? step.count : 0;
+  $('count-display').innerHTML = `${state.count} <span>/ ${target}</span>`;
+}
+
+function flash() {
+  const f = $('flash');
+  f.classList.remove('zap');
+  void f.offsetWidth;
+  f.classList.add('zap');
+}
+
+function stopTimer() {
+  if (state.timerId) { clearInterval(state.timerId); state.timerId = null; }
+}
+
+function startTimer() {
+  stopTimer();
+  state.timerId = setInterval(onTick, 1000);
+}
+
+function completeExercise() {
+  stopTimer();
+  stopDemoVideo();
+  setWorkoutMusic(null);
+  renderReps('rest');
+  celebrate();
+}
+
+/* ---------- timed mode ---------- */
+function startTimedExercise(ex) {
+  const t = resolveTiming(ex);
+  state.rep = 0;
+  state.phase = 'work';
+  state.secondsLeft = t.workSeconds;
+  state.phaseTotal = t.workSeconds;
+  $('ring-wrap').classList.remove('hidden');
+  $('count-panel').classList.remove('active');
+  $('rep-dots').classList.remove('hidden');
+  $('btn-pause').style.display = '';
+  buildRepDots(t.reps);
+  setVisual(ex);
+  $('exercise-name').textContent = ex.name;
+  updateProgressHighlight();
+  renderReps('work');
+  renderTimer('Go!', 'go', 'var(--go)');
+  playTimedPhaseVideo(ex, 'work');
+  setWorkoutMusic('work');
+  sounds.goBeep();
+  startTimer();
+}
+
+function tickTimed() {
+  const ex = currentExercise();
+  const t = resolveTiming(ex);
+  state.secondsLeft--;
+  if (state.secondsLeft > 0) {
+    sounds.tick();
+    renderTimer(
+      state.phase === 'work' ? 'Go!' : 'Rest',
+      state.phase === 'work' ? 'go' : 'rest',
+      state.phase === 'work' ? 'var(--go)' : 'var(--rest)'
+    );
+    return;
+  }
+
+  if (state.phase === 'work') {
+    state.rep++;
+    sounds.repDone();
+    flash();
+    if (state.rep >= t.reps) {
+      completeExercise();
+      return;
+    }
+    if (t.restSeconds > 0) {
+      state.phase = 'rest';
+      state.secondsLeft = t.restSeconds;
+      state.phaseTotal = t.restSeconds;
+      playTimedPhaseVideo(ex, 'rest');
+      setWorkoutMusic('rest');
+      sounds.restBeep();
+      renderReps('rest');
+      renderTimer('Rest', 'rest', 'var(--rest)');
+    } else {
+      state.phase = 'work';
+      state.secondsLeft = t.workSeconds;
+      state.phaseTotal = t.workSeconds;
+      playTimedPhaseVideo(ex, 'work');
+      setWorkoutMusic('work');
+      sounds.goBeep();
+      renderReps('work');
+      renderTimer('Go!', 'go', 'var(--go)');
+    }
+  } else {
+    state.phase = 'work';
+    state.secondsLeft = t.workSeconds;
+    state.phaseTotal = t.workSeconds;
+    playTimedPhaseVideo(ex, 'work');
+    setWorkoutMusic('work');
+    sounds.goBeep();
+    renderReps('work');
+    renderTimer('Go!', 'go', 'var(--go)');
+  }
+}
+
+/* ---------- dual mode (two timed holds = 1 rep) ---------- */
+function startDualExercise(ex) {
+  const t = resolveTiming(ex);
+  state.rep = 0;
+  state.phase = 'hold';
+  state.phaseIndex = 0;
+  const first = ex.phases[0];
+  state.secondsLeft = first.seconds;
+  state.phaseTotal = first.seconds;
+  $('ring-wrap').classList.remove('hidden');
+  $('count-panel').classList.remove('active');
+  $('rep-dots').classList.remove('hidden');
+  $('btn-pause').style.display = '';
+  buildRepDots(t.reps);
+  setVisual(ex);
+  $('exercise-name').textContent = ex.name;
+  updateProgressHighlight();
+  renderReps('hold');
+  renderDualPhase();
+  playDualPhaseVideo(ex);
+  setWorkoutMusic('work');
+  sounds.goBeep();
+  startTimer();
+}
+
+function renderDualPhase() {
+  const ex = currentExercise();
+  if (state.phase === 'rest') {
+    renderTimer('Rest', 'rest', 'var(--rest)');
+    return;
+  }
+  const p = ex.phases[state.phaseIndex];
+  const isAlt = state.phaseIndex % 2 === 1;
+  renderTimer(p.label, isAlt ? 'alt' : 'go', isAlt ? 'var(--phase2)' : 'var(--go)');
+}
+
+function tickDual() {
+  const ex = currentExercise();
+  const t = resolveTiming(ex);
+  state.secondsLeft--;
+  if (state.secondsLeft > 0) {
+    sounds.tick();
+    renderDualPhase();
+    return;
+  }
+
+  if (state.phase === 'rest') {
+    state.phase = 'hold';
+    state.phaseIndex = 0;
+    const first = ex.phases[0];
+    state.secondsLeft = first.seconds;
+    state.phaseTotal = first.seconds;
+    playDualPhaseVideo(ex);
+    setWorkoutMusic('work');
+    sounds.goBeep();
+    renderReps('hold');
+    renderDualPhase();
+    return;
+  }
+
+  // finished a hold phase
+  if (state.phaseIndex < ex.phases.length - 1) {
+    state.phaseIndex++;
+    const next = ex.phases[state.phaseIndex];
+    state.secondsLeft = next.seconds;
+    state.phaseTotal = next.seconds;
+    playDualPhaseVideo(ex);
+    sounds.goBeep();
+    renderDualPhase();
+    return;
+  }
+
+  // finished all phases = one rep done
+  state.rep++;
+  sounds.repDone();
+  flash();
+  if (state.rep >= t.reps) {
+    completeExercise();
+    return;
+  }
+  if (t.restSeconds > 0) {
+    state.phase = 'rest';
+    state.secondsLeft = t.restSeconds;
+    state.phaseTotal = t.restSeconds;
+    playDualPhaseVideo(ex);
+    setWorkoutMusic('rest');
+    sounds.restBeep();
+    renderReps('rest');
+    renderDualPhase();
+  } else {
+    state.phase = 'hold';
+    state.phaseIndex = 0;
+    const first = ex.phases[0];
+    state.secondsLeft = first.seconds;
+    state.phaseTotal = first.seconds;
+    playDualPhaseVideo(ex);
+    setWorkoutMusic('work');
+    sounds.goBeep();
+    renderReps('hold');
+    renderDualPhase();
+  }
+}
+
+/* ---------- count mode ---------- */
+function startCountExercise(ex) {
+  state.setIndex = 0;
+  state.seqIndex = 0;
+  state.count = 0;
+  stopTimer();
+  $('ring-wrap').classList.add('hidden');
+  $('count-panel').classList.add('active');
+  $('rep-dots').classList.add('hidden');
+  $('btn-pause').style.display = 'none';
+  setVisual(ex);
+  $('exercise-name').textContent = ex.name;
+  updateProgressHighlight();
+  renderCountPanel();
+  playCountStepVideo(ex);
+  setWorkoutMusic('work');
+}
+
+function onCountTap() {
+  if ($('celebration').classList.contains('active')) return;
+  if (!screens.workout.classList.contains('active')) return;
+  const ex = currentExercise();
+  if (!ex || ex.mode !== 'count') return;
+
+  const step = ex.sequence[state.seqIndex];
+  state.count++;
+  sounds.tick();
+  renderCountPanel();
+
+  if (state.count < step.count) return;
+
+  sounds.repDone();
+  flash();
+  state.count = 0;
+
+  if (state.seqIndex < ex.sequence.length - 1) {
+    state.seqIndex++;
+    renderCountPanel();
+    playCountStepVideo(ex);
+    return;
+  }
+
+  // finished one full set (all directions)
+  if (state.setIndex < (ex.sets || 1) - 1) {
+    state.setIndex++;
+    state.seqIndex = 0;
+    renderCountPanel();
+    playCountStepVideo(ex);
+    return;
+  }
+
+  completeExercise();
+}
+
+function onTick() {
+  if (state.paused) return;
+  const ex = currentExercise();
+  if (!ex) return;
+  if (ex.mode === 'dual') tickDual();
+  else if (ex.mode === 'timed') tickTimed();
+}
+
+function startExercise() {
+  state.between = false;
+  state.paused = false;
+  music.muted = false;
+  $('btn-pause').textContent = '⏸ Pause';
+  $('btn-pause-between').textContent = '⏸ Pause';
+  $('countdown').classList.remove('pulse');
+  $('between-count').classList.remove('pulse');
+  showScreen('workout');
+  const ex = currentExercise();
+  if (ex.mode === 'count') startCountExercise(ex);
+  else if (ex.mode === 'dual') startDualExercise(ex);
+  else startTimedExercise(ex);
+}
+
+function stopBetweenTimer() {
+  if (state.betweenTimerId) { clearInterval(state.betweenTimerId); state.betweenTimerId = null; }
+}
+
+function renderBetween() {
+  $('between-count').textContent = state.betweenLeft;
+}
+
+function startBetween() {
+  const ex = currentExercise();
+  const secs = CONFIG.betweenSeconds ?? 8;
+  state.between = true;
+  state.paused = false;
+  state.betweenLeft = secs;
+  music.muted = false;
+  stopDemoVideo();
+  setWorkoutMusic('rest');
+  playBetweenPreviewVideo(ex);
+  $('between-name').textContent = `${state.exercise + 1}. ${ex.name}`;
+  $('between-hint').textContent = ex.hint || '';
+  $('btn-pause-between').textContent = '⏸ Pause';
+  $('between-count').classList.remove('pulse');
+  updateProgressHighlight();
+  renderBetween();
+  showScreen('between');
+  sounds.goBeep();
+  stopBetweenTimer();
+  state.betweenTimerId = setInterval(tickBetween, 1000);
+}
+
+function tickBetween() {
+  if (state.paused) return;
+  state.betweenLeft--;
+  if (state.betweenLeft > 0) {
+    sounds.tick();
+    renderBetween();
+    return;
+  }
+  stopBetweenTimer();
+  stopBetweenVideo();
+  state.between = false;
+  setWorkoutMusic(null);
+  startExercise();
+}
+
+function endBetweenEarly() {
+  if (!state.between) return;
+  stopBetweenTimer();
+  stopBetweenVideo();
+  state.between = false;
+  state.paused = false;
+  setWorkoutMusic(null);
+  startExercise();
+}
+
+function celebrate() {
+  setWorkoutMusic(null);
+  let i;
+  do { i = Math.floor(Math.random() * CELEBRATION_FX.length); } while (i === state.lastFxIndex && CELEBRATION_FX.length > 1);
+  state.lastFxIndex = i;
+  const { fx: effect, sound } = CELEBRATION_FX[i];
+
+  $('celebration-title').textContent = pick(CHEERS);
+  const isLast = state.exercise >= EXERCISES.length - 1;
+  const next = EXERCISES[state.exercise + 1];
+  $('celebration-sub').textContent = isLast
+    ? 'That was the last one!!'
+    : `Next up: ${next.name} ${next.emoji || ''}`;
+
+  const row = $('dance-row');
+  row.innerHTML = '';
+  for (let n = 0; n < 5; n++) {
+    const s = document.createElement('span');
+    s.textContent = pick(DANCE_EMOJIS);
+    row.appendChild(s);
+  }
+
+  $('celebration').classList.add('active');
+  effect();
+  startFx();
+  sounds[sound]();
+
+  if (state.celebrationTimerId) clearTimeout(state.celebrationTimerId);
+
+  const minMs = CONFIG.celebrationMs || 8000;
+  const started = Date.now();
+  playBonusVideoOnce().then(() => {
+    const remaining = Math.max(0, minMs - (Date.now() - started));
+    state.celebrationTimerId = setTimeout(() => {
+      state.celebrationTimerId = null;
+      stopBonusVideo();
+      $('celebration').classList.remove('active');
+      nextExercise();
+    }, remaining);
+  });
+}
+
+function nextExercise() {
+  state.exercise++;
+  if (state.exercise >= EXERCISES.length) finishSession();
+  else startBetween();
+}
+
+function finishSession() {
+  stopTimer();
+  stopBetweenTimer();
+  stopDemoVideo();
+  stopBetweenVideo();
+  state.between = false;
+  setWorkoutMusic(null);
+  $('finish-blurb').textContent = `All ${EXERCISES.length} exercises complete!`;
+  showScreen('finish');
+  sounds.finale();
+  confettiBurst();
+  fireworks();
+  startFx();
+}
+
+function beginSession() {
+  ctx();
+  state.exercise = 0;
+  state.paused = false;
+  music.muted = false;
+  stopBetweenTimer();
+  stopDemoVideo();
+  buildProgressDots();
+  startBetween();
+}
+
+/* ============================== controls ============================== */
+function syncPauseButtons() {
+  const label = state.paused ? '▶ Resume' : '⏸ Pause';
+  $('btn-pause').textContent = label;
+  $('btn-pause-between').textContent = label;
+  $('countdown').classList.toggle('pulse', state.paused && !state.between);
+  $('between-count').classList.toggle('pulse', state.paused && state.between);
+}
+
+function togglePause() {
+  if ($('celebration').classList.contains('active')) return;
+  if (state.between) {
+    state.paused = !state.paused;
+    syncPauseButtons();
+    if (state.paused) {
+      music.pause();
+      $('between-video').pause();
+    } else {
+      music.resume();
+      const v = $('between-video');
+      if (v.classList.contains('active')) v.play().catch(() => {});
+    }
+    return;
+  }
+  if (!screens.workout.classList.contains('active')) return;
+  const ex = currentExercise();
+  if (ex && ex.mode === 'count') return;
+  state.paused = !state.paused;
+  syncPauseButtons();
+  if (state.paused) {
+    music.pause();
+    pauseDemoVideo();
+  } else {
+    music.resume();
+    resumeDemoVideo();
+  }
+}
+
+$('btn-start').addEventListener('click', beginSession);
+$('btn-pause').addEventListener('click', togglePause);
+$('btn-pause-between').addEventListener('click', togglePause);
+$('btn-count').addEventListener('click', onCountTap);
+$('btn-skip-between').addEventListener('click', endBetweenEarly);
+
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.key === ' ') {
+    e.preventDefault();
+    if (state.between) {
+      togglePause();
+      return;
+    }
+    const ex = currentExercise();
+    if (ex && ex.mode === 'count' && screens.workout.classList.contains('active') && !$('celebration').classList.contains('active')) {
+      onCountTap();
+    } else {
+      togglePause();
+    }
+  }
+});
+
+$('btn-skip').addEventListener('click', () => {
+  if (state.paused) {
+    state.paused = false;
+    music.muted = false;
+    syncPauseButtons();
+  }
+  stopTimer();
+  stopDemoVideo();
+  setWorkoutMusic(null);
+  // skip current exercise → celebration path via next after celebrate, or jump
+  nextExercise();
+});
+
+$('btn-restart').addEventListener('click', () => {
+  particles = [];
+  beginSession();
+});
+
+/* ============================== load config ============================== */
+const BONUS_FOLDER = 'video/bonus videos';
+const BONUS_VIDEO_EXT = /\.(mov|mp4|webm|m4v)$/i;
+
+async function probeUrl(url) {
+  try {
+    let res = await fetch(encodeURI(url), { method: 'HEAD', cache: 'no-store' });
+    if (res.ok) return true;
+    if (res.status === 405 || res.status === 501) {
+      res = await fetch(encodeURI(url), {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { Range: 'bytes=0-0' },
+      });
+      return res.ok || res.status === 206;
+    }
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
+function parseDirectoryListing(html) {
+  const names = new Set();
+  const re = /href\s*=\s*["']([^"']+)["']/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    let href = m[1];
+    try { href = decodeURIComponent(href); } catch (_) { /* keep raw */ }
+    href = href.split('?')[0].split('#')[0];
+    const base = href.replace(/\\/g, '/').split('/').pop();
+    if (!base || base === '..' || base.startsWith('.')) continue;
+    if (!BONUS_VIDEO_EXT.test(base)) continue;
+    names.add(base);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+async function loadBonusVideosFromDirectory() {
+  try {
+    const res = await fetch(encodeURI(`${BONUS_FOLDER}/`), { cache: 'no-store' });
+    if (!res.ok) return null;
+    const text = await res.text();
+    const ctype = (res.headers.get('content-type') || '').toLowerCase();
+    if (ctype.includes('json')) {
+      try {
+        const data = JSON.parse(text);
+        if (Array.isArray(data) && data.length) {
+          return data.map((f) => (String(f).includes('/') ? String(f) : `${BONUS_FOLDER}/${f}`));
+        }
+      } catch (_) { /* not json listing */ }
+    }
+    const names = parseDirectoryListing(text);
+    if (!names.length) return null;
+    return names.map((n) => `${BONUS_FOLDER}/${n}`);
+  } catch (_) {
+    return null;
+  }
+}
+
+async function loadBonusVideosByProbe() {
+  const found = [];
+  const exts = ['.mov', '.mp4', '.webm', '.m4v'];
+  for (let start = 1; start <= 100; start += 10) {
+    const checks = [];
+    for (let i = start; i < start + 10; i++) {
+      for (const ext of exts) {
+        const p = `${BONUS_FOLDER}/bonus_${i}${ext}`;
+        checks.push(probeUrl(p).then((ok) => (ok ? p : null)));
+      }
+    }
+    const hits = (await Promise.all(checks)).filter(Boolean);
+    if (!hits.length) {
+      if (found.length || start > 1) break;
+      continue;
+    }
+    found.push(...hits);
+  }
+  return [...new Set(found)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+async function loadBonusVideos() {
+  const fromDir = await loadBonusVideosFromDirectory();
+  if (fromDir && fromDir.length) return fromDir;
+
+  const fromProbe = await loadBonusVideosByProbe();
+  if (fromProbe.length) return fromProbe;
+
+  if (Array.isArray(window.BONUS_VIDEOS) && window.BONUS_VIDEOS.length) {
+    return window.BONUS_VIDEOS.slice();
+  }
+  return [];
+}
+
+function applyConfig(config) {
+  CONFIG = config;
+  EXERCISES = config.exercises || [];
+  if (!Array.isArray(CONFIG.bonusVideos)) CONFIG.bonusVideos = [];
+  if (config.title) {
+    document.title = config.title;
+    $('app-title').textContent = `🤸 ${config.title} 🤸`;
+  }
+  $('start-blurb').innerHTML =
+    `${EXERCISES.length} hand & wrist physio exercises<br>` +
+    `Configured in exercises.json · pictures & timings per move<br>` +
+    `Finish each exercise for a surprise party! 🎉`;
+  $('btn-start').disabled = EXERCISES.length === 0;
+}
+
+async function loadConfig() {
+  try {
+    const res = await fetch('exercises.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    applyConfig(await res.json());
+  } catch (err) {
+    if (window.EXERCISES_CONFIG) {
+      applyConfig(window.EXERCISES_CONFIG);
+    } else {
+      $('load-error').hidden = false;
+      $('load-error').textContent =
+        'Could not load exercises.json. Open via a local server (not file://), e.g. `npx serve gabby-physio`.';
+      $('start-blurb').textContent = 'Exercises failed to load.';
+      console.error(err);
+      return;
+    }
+  }
+  CONFIG.bonusVideos = await loadBonusVideos();
+}
+
+loadConfig();
+</script>
+</body>
+</html>
