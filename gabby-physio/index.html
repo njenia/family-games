@@ -304,6 +304,23 @@
   }
   #flash.zap { animation: flash 0.35s ease-out; }
 
+  #gabby-pong {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--accent);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+    z-index: 28;
+    pointer-events: none;
+    display: none;
+    will-change: transform;
+  }
+  #gabby-pong.active { display: block; }
+
   .pulse { animation: pulse 1s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
 
@@ -386,6 +403,7 @@
 <body>
 <canvas id="fx-canvas"></canvas>
 <div id="flash"></div>
+<img id="gabby-pong" src="gabby.png" alt="">
 
 <div id="app">
 
@@ -462,11 +480,18 @@
 </div>
 
 <script src="exercises.js"></script>
+<script src="bonus-videos.js"></script>
 <script>
 'use strict';
 
-const CHEERS = ['Amazing!', 'Fantastic!', 'Super Star!', 'Wowza!', 'Incredible!', 'You Rock!', 'Brilliant!', 'Champion!', 'Unstoppable!', 'Legendary!'];
-const DANCE_EMOJIS = ['🎉','🥳','🌟','🦄','🐸','🎈','🍭','🐱','🚀','🌈','🐶','✨','🍦','🤖','🦖'];
+const CHEERS = [
+  'Amazing!', 'Fantastic!', 'Super Star!', 'Wowza!', 'Incredible!',
+  'You Rock!', 'Brilliant!', 'Champion!', 'Unstoppable!', 'Legendary!',
+  'Awesome!', 'High Five!', 'Nailed It!', 'Boom!', 'Yes!!',
+  'Power Move!', 'Crushing It!', 'Epic!', 'Victory!', 'So Strong!',
+  'Way to Go!', 'Fabulous!', 'Mind Blown!', 'Keep Going!', 'Hero Time!',
+];
+const DANCE_EMOJIS = ['🎉','🥳','🌟','🦄','🐸','🎈','🍭','🐱','🚀','🌈','🐶','✨','🍦','🤖','🦖','💖','⚡','👑','🔥','🍀'];
 
 let CONFIG = null;
 let EXERCISES = [];
@@ -518,6 +543,31 @@ const sounds = {
     const notes = [523, 587, 659, 698, 784, 880, 988, 1047];
     notes.forEach((f, i) => tone(f, i * 0.11, 0.16, { type: 'triangle', vol: 0.28 }));
   },
+  drums() {
+    [0, 0.2, 0.4, 0.55, 0.7, 0.85].forEach((t, i) => {
+      tone(90 + (i % 2) * 40, t, 0.12, { type: 'triangle', vol: 0.35 });
+      tone(180, t + 0.05, 0.08, { type: 'square', vol: 0.08 });
+    });
+  },
+  whoosh() {
+    tone(200, 0, 0.6, { type: 'sawtooth', vol: 0.12, slideTo: 900 });
+    tone(400, 0.35, 0.55, { type: 'sine', vol: 0.18, slideTo: 1400 });
+    for (let i = 0; i < 8; i++) tone(600 + i * 80, 0.7 + i * 0.05, 0.12, { type: 'triangle', vol: 0.15 });
+  },
+  cheer() {
+    [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.09, 0.2, { type: 'square', vol: 0.12 }));
+    tone(1568, 0.7, 0.4, { type: 'triangle', vol: 0.22 });
+  },
+  bubbles() {
+    for (let i = 0; i < 10; i++) {
+      tone(400 + Math.random() * 800, i * 0.12, 0.2, { type: 'sine', vol: 0.14, slideTo: 900 + Math.random() * 600 });
+    }
+  },
+  zigZag() {
+    [300, 800, 350, 900, 400, 1000, 500, 1200].forEach((f, i) =>
+      tone(f, i * 0.1, 0.12, { type: 'square', vol: 0.12 })
+    );
+  },
   finale() {
     const notes = [523, 659, 784, 1047, 784, 1047, 1319, 1568];
     notes.forEach((f, i) => tone(f, i * 0.16, 0.3, { type: 'triangle', vol: 0.3 }));
@@ -525,8 +575,8 @@ const sounds = {
 };
 
 /* ============================== workout music ============================== */
-// Add more files here — one is picked at random each time work starts
-const WORK_TRACKS = [
+// Strong stingers — play once when a work period starts
+const STRONG_TRACKS = [
   'audio/strong1.m4a',
   'audio/strong2.m4a',
   'audio/strong3.m4a',
@@ -536,90 +586,211 @@ const REST_TRACK = 'audio/rest.m4a';
 const music = {
   mode: null, // 'work' | 'rest' | null
   muted: false,
-  workAudio: null,
+  strongAudio: null,
   restAudio: null,
-  lastWorkTrack: null,
+  lastStrong: null,
+  bedTimer: null,
+  bedStep: 0,
+  master: null,
+
+  ensureMaster() {
+    const ac = ctx();
+    if (!this.master) {
+      this.master = ac.createGain();
+      this.master.gain.value = 0.18;
+      this.master.connect(ac.destination);
+    }
+    return ac;
+  },
 
   /** @param {'work'|'rest'|null} mode */
   set(mode) {
-    // Work always starts a fresh one-shot, even mid-exercise between reps
     if (mode === 'work') {
-      this._stopAllAudio();
-      this.mode = 'work';
-      this._startWorkTrack();
+      const alreadyWork = this.mode === 'work';
+      this._stopStrong();
+      if (!alreadyWork) {
+        this._stopRest();
+        this._stopBed();
+        this.mode = 'work';
+        this._startWorkBed(); // continuous energetic bed
+      } else {
+        this.mode = 'work';
+      }
+      this._playStrongOnce(); // one-shot cue each work period
       return;
     }
 
     if (mode === this.mode) return;
 
-    this._stopAllAudio();
+    this._stopStrong();
+    this._stopBed();
+    this._stopRest();
     this.mode = mode;
     if (!mode) return;
-    this._startRestTrack();
+    this._startRestBed(); // calm bed for whole rest
   },
 
   stop() {
-    this._stopAllAudio();
+    this._stopStrong();
+    this._stopBed();
+    this._stopRest();
     this.mode = null;
   },
 
   pause() {
     this.muted = true;
-    if (this.workAudio && !this.workAudio.paused) this.workAudio.pause();
+    if (this.strongAudio && !this.strongAudio.paused) this.strongAudio.pause();
     if (this.restAudio && !this.restAudio.paused) this.restAudio.pause();
+    if (this.master) {
+      const ac = ctx();
+      this.master.gain.cancelScheduledValues(ac.currentTime);
+      this.master.gain.setTargetAtTime(0.0001, ac.currentTime, 0.05);
+    }
   },
 
   resume() {
     this.muted = false;
-    // One-shot clips — only resume if they haven't finished yet
-    if (this.mode === 'work' && this.workAudio && !this.workAudio.ended) {
-      this.workAudio.play().catch(() => {});
+    if (this.mode === 'work' && this.strongAudio && !this.strongAudio.ended) {
+      this.strongAudio.play().catch(() => {});
     }
-    if (this.mode === 'rest' && this.restAudio && !this.restAudio.ended) {
+    if (this.mode === 'rest' && this.restAudio) {
       this.restAudio.play().catch(() => {});
+    }
+    if (this.master && this.mode === 'work') {
+      const ac = ctx();
+      this.master.gain.cancelScheduledValues(ac.currentTime);
+      this.master.gain.setTargetAtTime(0.18, ac.currentTime, 0.08);
     }
   },
 
-  _pickWorkTrack() {
-    if (WORK_TRACKS.length === 0) return null;
-    if (WORK_TRACKS.length === 1) return WORK_TRACKS[0];
+  _pickStrong() {
+    if (STRONG_TRACKS.length === 1) return STRONG_TRACKS[0];
     let track;
     do {
-      track = WORK_TRACKS[Math.floor(Math.random() * WORK_TRACKS.length)];
-    } while (track === this.lastWorkTrack && WORK_TRACKS.length > 1);
+      track = STRONG_TRACKS[Math.floor(Math.random() * STRONG_TRACKS.length)];
+    } while (track === this.lastStrong && STRONG_TRACKS.length > 1);
     return track;
   },
 
-  _startWorkTrack() {
-    const track = this._pickWorkTrack();
+  _playStrongOnce() {
+    const track = this._pickStrong();
     if (!track) return;
-    this.lastWorkTrack = track;
+    this.lastStrong = track;
     const audio = new Audio(track);
     audio.loop = false;
-    audio.volume = 0.55;
-    this.workAudio = audio;
+    audio.volume = 0.65;
+    this.strongAudio = audio;
     if (!this.muted) audio.play().catch(() => {});
   },
 
-  _startRestTrack() {
+  _stopStrong() {
+    if (!this.strongAudio) return;
+    this.strongAudio.pause();
+    this.strongAudio.src = '';
+    this.strongAudio = null;
+  },
+
+  _startRestBed() {
     const audio = new Audio(REST_TRACK);
-    audio.loop = false;
-    audio.volume = 0.55;
+    audio.loop = true;
+    audio.volume = 0.45;
     this.restAudio = audio;
     if (!this.muted) audio.play().catch(() => {});
   },
 
-  _stopAllAudio() {
-    if (this.workAudio) {
-      this.workAudio.pause();
-      this.workAudio.src = '';
-      this.workAudio = null;
+  _stopRest() {
+    if (!this.restAudio) return;
+    this.restAudio.pause();
+    this.restAudio.src = '';
+    this.restAudio = null;
+  },
+
+  _startWorkBed() {
+    this.ensureMaster();
+    if (!this.muted) {
+      const ac = ctx();
+      this.master.gain.cancelScheduledValues(ac.currentTime);
+      this.master.gain.setTargetAtTime(0.18, ac.currentTime, 0.05);
     }
-    if (this.restAudio) {
-      this.restAudio.pause();
-      this.restAudio.src = '';
-      this.restAudio = null;
+    this.bedStep = 0;
+    this._clearBedTimer();
+    this.bedTimer = setInterval(() => this._workBedTick(), 170);
+    this._workBedTick();
+  },
+
+  _stopBed() {
+    this._clearBedTimer();
+    if (this.master) {
+      const ac = ctx();
+      this.master.gain.cancelScheduledValues(ac.currentTime);
+      this.master.gain.setTargetAtTime(0.0001, ac.currentTime, 0.06);
     }
+  },
+
+  _clearBedTimer() {
+    if (this.bedTimer) { clearInterval(this.bedTimer); this.bedTimer = null; }
+  },
+
+  _bedNote(freq, dur, { type = 'triangle', vol = 0.1, when = 0 } = {}) {
+    const ac = this.ensureMaster();
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = type;
+    const t0 = ac.currentTime + when;
+    osc.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g).connect(this.master);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  },
+
+  _bedKick() {
+    const ac = this.ensureMaster();
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    const t0 = ac.currentTime;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(140, t0);
+    osc.frequency.exponentialRampToValueAtTime(45, t0 + 0.12);
+    g.gain.setValueAtTime(0.28, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+    osc.connect(g).connect(this.master);
+    osc.start(t0);
+    osc.stop(t0 + 0.18);
+  },
+
+  _bedNoise(dur, vol = 0.06) {
+    const ac = this.ensureMaster();
+    const n = Math.max(1, Math.floor(ac.sampleRate * dur));
+    const buf = ac.createBuffer(1, n, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) data[i] = Math.random() * 2 - 1;
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const g = ac.createGain();
+    const f = ac.createBiquadFilter();
+    f.type = 'highpass';
+    f.frequency.value = 4000;
+    const t0 = ac.currentTime;
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(f).connect(g).connect(this.master);
+    src.start(t0);
+  },
+
+  _workBedTick() {
+    if (this.muted || this.mode !== 'work') return;
+    const beat = this.bedStep % 8;
+    if (beat === 0 || beat === 4) this._bedKick();
+    if (beat === 2 || beat === 6) this._bedNoise(0.05, 0.08);
+    this._bedNoise(0.015, 0.03);
+    const bass = [98, 98, 130.8, 98, 87.3, 87.3, 116.5, 98];
+    this._bedNote(bass[beat], 0.14, { type: 'triangle', vol: 0.12 });
+    const lead = [523.3, 659.3, 783.9, 1046.5, 783.9, 659.3, 587.3, 523.3];
+    this._bedNote(lead[beat], 0.1, { type: 'square', vol: 0.035 });
+    this.bedStep++;
   },
 };
 
@@ -767,6 +938,86 @@ function balloons() {
 const gabbyImg = new Image();
 gabbyImg.src = 'gabby.png';
 
+/* Gabby pong — one special rep per exercise */
+const gabbyPong = {
+  active: false,
+  raf: 0,
+  x: 0,
+  y: 0,
+  vx: 0,
+  vy: 0,
+  size: 96,
+
+  start() {
+    if (this.active) return;
+    this.active = true;
+    this.size = Math.round(Math.min(110, Math.max(72, Math.min(W(), H()) * 0.16)));
+    const el = $('gabby-pong');
+    el.style.width = this.size + 'px';
+    el.style.height = this.size + 'px';
+    el.classList.add('active');
+    const r = this.size / 2;
+    this.x = rand(r + 8, Math.max(r + 16, W() - r - 8));
+    this.y = rand(r + 8, Math.max(r + 16, H() - r - 8));
+    const speed = rand(3.8, 5.8);
+    let angle = rand(0.35, Math.PI * 2 - 0.35);
+    // Prefer diagonal travel so it bounces interestingly
+    if (Math.abs(Math.cos(angle)) < 0.35 || Math.abs(Math.sin(angle)) < 0.35) {
+      angle = pick([0.6, 1.1, 2.1, 2.6, 3.7, 4.2, 5.2, 5.7]);
+    }
+    this.vx = Math.cos(angle) * speed;
+    this.vy = Math.sin(angle) * speed;
+    this._draw();
+    this._loop();
+  },
+
+  stop() {
+    this.active = false;
+    if (this.raf) {
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+    }
+    $('gabby-pong').classList.remove('active');
+  },
+
+  _draw() {
+    const el = $('gabby-pong');
+    el.style.transform = `translate(${this.x - this.size / 2}px, ${this.y - this.size / 2}px)`;
+  },
+
+  _loop() {
+    if (!this.active) return;
+    this.raf = requestAnimationFrame(() => this._loop());
+    if (state.paused) return;
+
+    this.x += this.vx;
+    this.y += this.vy;
+    const r = this.size / 2;
+    if (this.x <= r) { this.x = r; this.vx = Math.abs(this.vx); }
+    else if (this.x >= W() - r) { this.x = W() - r; this.vx = -Math.abs(this.vx); }
+    if (this.y <= r) { this.y = r; this.vy = Math.abs(this.vy); }
+    else if (this.y >= H() - r) { this.y = H() - r; this.vy = -Math.abs(this.vy); }
+
+    this._draw();
+  },
+};
+
+function pickGabbyRep(reps) {
+  const n = Math.max(1, reps | 0);
+  return Math.floor(Math.random() * n);
+}
+
+function syncGabbyPong() {
+  const activeWork =
+    screens.workout.classList.contains('active') &&
+    !state.between &&
+    !$('celebration').classList.contains('active') &&
+    state.rep === state.gabbyRep &&
+    state.phase !== 'rest';
+  if (activeWork) gabbyPong.start();
+  else gabbyPong.stop();
+}
+
 function gabbyBounce() {
   for (let i = 0; i < 8; i++) {
     const size = rand(60, 120);
@@ -801,13 +1052,263 @@ function gabbyBounce() {
   confettiBurst();
 }
 
+function heartBurst() {
+  for (let i = 0; i < 40; i++) {
+    particles.push({
+      x: W() / 2 + rand(-40, 40), y: H() * 0.65 + rand(-20, 20),
+      vx: rand(-3, 3), vy: rand(-6, -2.5),
+      size: rand(22, 40), rot: rand(-0.3, 0.3), vr: rand(-0.05, 0.05),
+      life: rand(120, 220),
+      update(p) { p.x += p.vx; p.y += p.vy; p.vy += 0.04; p.rot += p.vr; p.vx *= 0.99; },
+      draw(c, p) {
+        c.save();
+        c.translate(p.x, p.y);
+        c.rotate(p.rot);
+        c.globalAlpha = Math.min(1, p.life / 50);
+        c.font = p.size + 'px serif';
+        c.textAlign = 'center';
+        c.fillText(pick(['💖', '❤️', '💕', '💗']), 0, 0);
+        c.restore();
+      },
+    });
+  }
+}
+
+function ringRipples() {
+  for (let i = 0; i < 8; i++) {
+    particles.push({
+      x: W() / 2, y: H() / 2,
+      radius: 10, vr: rand(2.5, 5),
+      color: pick(COLORS), life: 90 + i * 12, delay: i * 8,
+      update(p) {
+        if (p.delay > 0) { p.delay--; return; }
+        p.radius += p.vr;
+      },
+      draw(c, p) {
+        if (p.delay > 0) return;
+        c.globalAlpha = Math.min(1, p.life / 70);
+        c.strokeStyle = p.color;
+        c.lineWidth = 5;
+        c.beginPath();
+        c.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        c.stroke();
+        c.globalAlpha = 1;
+      },
+    });
+  }
+  sparkleTwinkle();
+}
+
+function sparkleTwinkle() {
+  for (let i = 0; i < 50; i++) {
+    particles.push({
+      x: rand(0, W()), y: rand(0, H()),
+      size: rand(8, 22), life: rand(40, 100), delay: Math.floor(rand(0, 40)),
+      flash: rand(0, Math.PI * 2),
+      update(p) {
+        if (p.delay > 0) { p.delay--; return; }
+        p.flash += 0.25;
+      },
+      draw(c, p) {
+        if (p.delay > 0) return;
+        const a = 0.35 + 0.65 * Math.abs(Math.sin(p.flash));
+        c.globalAlpha = a * Math.min(1, p.life / 30);
+        c.font = p.size + 'px serif';
+        c.textAlign = 'center';
+        c.fillText(pick(['✨', '⭐', '🌟']), p.x, p.y);
+        c.globalAlpha = 1;
+      },
+    });
+  }
+}
+
+function sideCannons() {
+  for (let side = 0; side < 2; side++) {
+    const fromLeft = side === 0;
+    for (let i = 0; i < 70; i++) {
+      particles.push({
+        x: fromLeft ? 0 : W(),
+        y: rand(H() * 0.25, H() * 0.75),
+        vx: (fromLeft ? 1 : -1) * rand(4, 9),
+        vy: rand(-4, 2),
+        w: rand(6, 14), h: rand(8, 16),
+        rot: rand(0, Math.PI * 2), vr: rand(-0.3, 0.3),
+        color: pick(COLORS), life: rand(90, 160),
+        update(p) { p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.rot += p.vr; p.vx *= 0.99; },
+        draw(c, p) {
+          c.save(); c.translate(p.x, p.y); c.rotate(p.rot);
+          c.globalAlpha = Math.min(1, p.life / 40);
+          c.fillStyle = p.color; c.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          c.restore();
+        },
+      });
+    }
+  }
+}
+
+function particleFountain() {
+  for (let i = 0; i < 120; i++) {
+    particles.push({
+      x: W() / 2 + rand(-20, 20),
+      y: H() + 10,
+      vx: rand(-3.5, 3.5),
+      vy: rand(-12, -6),
+      color: pick(COLORS),
+      size: rand(3, 7),
+      life: rand(100, 180),
+      delay: Math.floor(i / 8),
+      update(p) {
+        if (p.delay > 0) { p.delay--; return; }
+        p.x += p.vx; p.y += p.vy; p.vy += 0.18;
+      },
+      draw(c, p) {
+        if (p.delay > 0) return;
+        c.globalAlpha = Math.min(1, p.life / 50);
+        c.fillStyle = p.color;
+        c.beginPath(); c.arc(p.x, p.y, p.size, 0, Math.PI * 2); c.fill();
+        c.globalAlpha = 1;
+      },
+    });
+  }
+}
+
+function smileyStorm() {
+  const faces = ['😀', '😁', '🥳', '😎', '🤩', '😸', '🥳'];
+  for (let i = 0; i < 35; i++) {
+    particles.push({
+      x: rand(0, W()), y: rand(-H() * 0.5, -20),
+      vy: rand(2, 5), vx: rand(-1, 1),
+      size: rand(28, 48), rot: rand(-0.4, 0.4), vr: rand(-0.08, 0.08),
+      face: pick(faces), life: 280,
+      update(p) { p.y += p.vy; p.x += p.vx + Math.sin(p.y * 0.02) * 0.8; p.rot += p.vr; if (p.y > H() + 40) p.life = 0; },
+      draw(c, p) {
+        c.save(); c.translate(p.x, p.y); c.rotate(p.rot);
+        c.font = p.size + 'px serif'; c.textAlign = 'center';
+        c.fillText(p.face, 0, 0);
+        c.restore();
+      },
+    });
+  }
+}
+
+function rainbowWave() {
+  for (let i = 0; i < 80; i++) {
+    const col = i % COLORS.length;
+    particles.push({
+      x: -20 - i * 8,
+      y: H() * 0.35 + Math.sin(i * 0.35) * 40,
+      vx: rand(5, 8),
+      color: COLORS[col],
+      size: rand(10, 18),
+      life: 160 + i,
+      phase: i * 0.25,
+      update(p) {
+        p.x += p.vx;
+        p.y = H() * 0.4 + Math.sin(p.phase + p.x * 0.02) * 55;
+      },
+      draw(c, p) {
+        c.globalAlpha = Math.min(1, p.life / 50);
+        c.fillStyle = p.color;
+        c.beginPath(); c.arc(p.x, p.y, p.size, 0, Math.PI * 2); c.fill();
+        c.globalAlpha = 1;
+      },
+    });
+  }
+}
+
+function megaGabby() {
+  const size = Math.min(W(), H()) * 0.35;
+  particles.push({
+    x: W() / 2, y: H() / 2,
+    scale: 0.2, vs: 0.045,
+    rot: 0, vr: 0.08,
+    life: 220,
+    update(p) {
+      if (p.scale < 1.15) p.scale += p.vs;
+      else p.vs = 0;
+      p.rot += p.vr;
+      p.vr *= 0.97;
+    },
+    draw(c, p) {
+      if (!gabbyImg.complete) return;
+      const s = size * p.scale;
+      c.save();
+      c.translate(p.x, p.y);
+      c.rotate(p.rot);
+      c.globalAlpha = Math.min(1, p.life / 40);
+      c.beginPath();
+      c.arc(0, 0, s / 2, 0, Math.PI * 2);
+      c.clip();
+      const crop = Math.min(gabbyImg.naturalWidth, gabbyImg.naturalHeight);
+      const sx = (gabbyImg.naturalWidth - crop) / 2;
+      const sy = (gabbyImg.naturalHeight - crop) / 2;
+      c.drawImage(gabbyImg, sx, sy, crop, crop, -s / 2, -s / 2, s, s);
+      c.restore();
+    },
+  });
+  for (let i = 0; i < 30; i++) {
+    particles.push({
+      x: W() / 2, y: H() / 2,
+      vx: rand(-6, 6), vy: rand(-6, 6),
+      size: rand(16, 28), life: rand(80, 140),
+      update(p) { p.x += p.vx; p.y += p.vy; p.vx *= 0.98; p.vy *= 0.98; },
+      draw(c, p) {
+        c.globalAlpha = Math.min(1, p.life / 40);
+        c.font = p.size + 'px serif'; c.textAlign = 'center';
+        c.fillText(pick(['✨', '⭐', '🌟', '💫']), p.x, p.y);
+        c.globalAlpha = 1;
+      },
+    });
+  }
+}
+
+function comboBlast() {
+  fireworks();
+  setTimeout(() => confettiBurst(), 200);
+  setTimeout(() => sideCannons(), 400);
+}
+
+function spiralHearts() {
+  const cx = W() / 2, cy = H() / 2;
+  for (let i = 0; i < 60; i++) {
+    particles.push({
+      angle: i * 0.4, radius: 8, cx, cy,
+      speed: rand(1.2, 2.4), size: rand(16, 28),
+      life: rand(140, 220), delay: i * 2,
+      update(p) {
+        if (p.delay > 0) { p.delay--; return; }
+        p.radius += p.speed; p.angle += 0.05;
+      },
+      draw(c, p) {
+        if (p.delay > 0) return;
+        const x = p.cx + Math.cos(p.angle) * p.radius;
+        const y = p.cy + Math.sin(p.angle) * p.radius;
+        c.globalAlpha = Math.min(1, p.life / 50);
+        c.font = p.size + 'px serif'; c.textAlign = 'center';
+        c.fillText(pick(['💖', '💗', '💞']), x, y);
+        c.globalAlpha = 1;
+      },
+    });
+  }
+}
+
 const CELEBRATION_FX = [
-  { fx: confettiBurst, sound: 'fanfare' },
-  { fx: fireworks,     sound: 'sparkle' },
-  { fx: emojiRain,     sound: 'slideWhistle' },
-  { fx: starSpiral,    sound: 'melody' },
-  { fx: balloons,      sound: 'boings' },
-  { fx: gabbyBounce,   sound: 'melody' },
+  { fx: confettiBurst,   sound: 'fanfare' },
+  { fx: fireworks,       sound: 'sparkle' },
+  { fx: emojiRain,       sound: 'slideWhistle' },
+  { fx: starSpiral,      sound: 'melody' },
+  { fx: balloons,        sound: 'boings' },
+  { fx: gabbyBounce,     sound: 'melody' },
+  { fx: heartBurst,      sound: 'cheer' },
+  { fx: ringRipples,     sound: 'whoosh' },
+  { fx: sparkleTwinkle,  sound: 'sparkle' },
+  { fx: sideCannons,     sound: 'drums' },
+  { fx: particleFountain,sound: 'whoosh' },
+  { fx: smileyStorm,     sound: 'boings' },
+  { fx: rainbowWave,     sound: 'zigZag' },
+  { fx: megaGabby,       sound: 'cheer' },
+  { fx: comboBlast,      sound: 'fanfare' },
+  { fx: spiralHearts,    sound: 'bubbles' },
 ];
 
 /* ============================== helpers ============================== */
@@ -978,10 +1479,16 @@ function stopBonusVideo() {
 
 /** Play a random bonus clip once. Resolves when it ends (or immediately if none). */
 async function playBonusVideoOnce() {
-  const list = await loadBonusVideos();
-  if (CONFIG) CONFIG.bonusVideos = list;
+  let list = (CONFIG && CONFIG.bonusVideos && CONFIG.bonusVideos.length)
+    ? CONFIG.bonusVideos
+    : [];
+  if (!list.length) {
+    list = await loadBonusVideos();
+    if (CONFIG) CONFIG.bonusVideos = list;
+  }
   return new Promise((resolve) => {
     if (!list.length) {
+      console.warn('No bonus videos found in', BONUS_FOLDER);
       stopBonusVideo();
       resolve();
       return;
@@ -1004,7 +1511,10 @@ async function playBonusVideoOnce() {
       resolve();
     };
     v.onended = done;
-    v.onerror = done;
+    v.onerror = () => {
+      console.warn('Bonus video failed to play:', src);
+      done();
+    };
     const play = () => v.play().catch(done);
     if (v.readyState >= 2) play();
     else v.addEventListener('loadeddata', play, { once: true });
@@ -1032,6 +1542,7 @@ const state = {
   betweenTimerId: null,
   celebrationTimerId: null,
   lastBonusIndex: -1,
+  gabbyRep: 0,
 };
 
 function showScreen(name) {
@@ -1069,6 +1580,7 @@ function jumpToExercise(index) {
 
   stopTimer();
   stopBetweenTimer();
+  gabbyPong.stop();
   stopDemoVideo();
   stopBetweenVideo();
   stopBonusVideo();
@@ -1130,6 +1642,7 @@ function jumpToRep(repIndex) {
   }
   setWorkoutMusic('work');
   sounds.goBeep();
+  syncGabbyPong();
   startTimer();
 }
 
@@ -1185,6 +1698,7 @@ function startTimer() {
 
 function completeExercise() {
   stopTimer();
+  gabbyPong.stop();
   stopDemoVideo();
   setWorkoutMusic(null);
   renderReps('rest');
@@ -1195,6 +1709,7 @@ function completeExercise() {
 function startTimedExercise(ex) {
   const t = resolveTiming(ex);
   state.rep = 0;
+  state.gabbyRep = pickGabbyRep(t.reps);
   state.phase = 'work';
   state.secondsLeft = t.workSeconds;
   state.phaseTotal = t.workSeconds;
@@ -1211,6 +1726,7 @@ function startTimedExercise(ex) {
   playTimedPhaseVideo(ex, 'work');
   setWorkoutMusic('work');
   sounds.goBeep();
+  syncGabbyPong();
   startTimer();
 }
 
@@ -1245,6 +1761,7 @@ function tickTimed() {
       sounds.restBeep();
       renderReps('rest');
       renderTimer('Rest', 'rest', 'var(--rest)');
+      syncGabbyPong();
     } else {
       state.phase = 'work';
       state.secondsLeft = t.workSeconds;
@@ -1254,6 +1771,7 @@ function tickTimed() {
       sounds.goBeep();
       renderReps('work');
       renderTimer('Go!', 'go', 'var(--go)');
+      syncGabbyPong();
     }
   } else {
     state.phase = 'work';
@@ -1264,6 +1782,7 @@ function tickTimed() {
     sounds.goBeep();
     renderReps('work');
     renderTimer('Go!', 'go', 'var(--go)');
+    syncGabbyPong();
   }
 }
 
@@ -1271,6 +1790,7 @@ function tickTimed() {
 function startDualExercise(ex) {
   const t = resolveTiming(ex);
   state.rep = 0;
+  state.gabbyRep = pickGabbyRep(t.reps);
   state.phase = 'hold';
   state.phaseIndex = 0;
   const first = ex.phases[0];
@@ -1289,6 +1809,7 @@ function startDualExercise(ex) {
   playDualPhaseVideo(ex);
   setWorkoutMusic('work');
   sounds.goBeep();
+  syncGabbyPong();
   startTimer();
 }
 
@@ -1324,6 +1845,7 @@ function tickDual() {
     sounds.goBeep();
     renderReps('hold');
     renderDualPhase();
+    syncGabbyPong();
     return;
   }
 
@@ -1356,6 +1878,7 @@ function tickDual() {
     sounds.restBeep();
     renderReps('rest');
     renderDualPhase();
+    syncGabbyPong();
   } else {
     state.phase = 'hold';
     state.phaseIndex = 0;
@@ -1367,6 +1890,7 @@ function tickDual() {
     sounds.goBeep();
     renderReps('hold');
     renderDualPhase();
+    syncGabbyPong();
   }
 }
 
@@ -1462,6 +1986,7 @@ function startBetween() {
   state.paused = false;
   state.betweenLeft = secs;
   music.muted = false;
+  gabbyPong.stop();
   stopDemoVideo();
   setWorkoutMusic('rest');
   playBetweenPreviewVideo(ex);
@@ -1503,6 +2028,7 @@ function endBetweenEarly() {
 }
 
 function celebrate() {
+  gabbyPong.stop();
   setWorkoutMusic(null);
   let i;
   do { i = Math.floor(Math.random() * CELEBRATION_FX.length); } while (i === state.lastFxIndex && CELEBRATION_FX.length > 1);
@@ -1553,6 +2079,7 @@ function nextExercise() {
 function finishSession() {
   stopTimer();
   stopBetweenTimer();
+  gabbyPong.stop();
   stopDemoVideo();
   stopBetweenVideo();
   state.between = false;
@@ -1643,6 +2170,7 @@ $('btn-skip').addEventListener('click', () => {
     syncPauseButtons();
   }
   stopTimer();
+  gabbyPong.stop();
   stopDemoVideo();
   setWorkoutMusic(null);
   // skip current exercise → celebration path via next after celebrate, or jump
@@ -1658,38 +2186,27 @@ $('btn-restart').addEventListener('click', () => {
 const BONUS_FOLDER = 'video/bonus videos';
 const BONUS_VIDEO_EXT = /\.(mov|mp4|webm|m4v)$/i;
 
-async function probeUrl(url) {
-  try {
-    let res = await fetch(encodeURI(url), { method: 'HEAD', cache: 'no-store' });
-    if (res.ok) return true;
-    if (res.status === 405 || res.status === 501) {
-      res = await fetch(encodeURI(url), {
-        method: 'GET',
-        cache: 'no-store',
-        headers: { Range: 'bytes=0-0' },
-      });
-      return res.ok || res.status === 206;
-    }
-    return false;
-  } catch (_) {
-    return false;
-  }
-}
-
-function parseDirectoryListing(html) {
-  const names = new Set();
-  const re = /href\s*=\s*["']([^"']+)["']/gi;
-  let m;
-  while ((m = re.exec(html))) {
-    let href = m[1];
-    try { href = decodeURIComponent(href); } catch (_) { /* keep raw */ }
-    href = href.split('?')[0].split('#')[0];
-    const base = href.replace(/\\/g, '/').split('/').pop();
-    if (!base || base === '..' || base.startsWith('.')) continue;
-    if (!BONUS_VIDEO_EXT.test(base)) continue;
-    names.add(base);
-  }
-  return [...names].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+function probeVideoFile(url) {
+  return new Promise((resolve) => {
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    v.muted = true;
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      v.onloadedmetadata = null;
+      v.onerror = null;
+      v.removeAttribute('src');
+      try { v.load(); } catch (_) {}
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(false), 900);
+    v.onloadedmetadata = () => finish(true);
+    v.onerror = () => finish(false);
+    v.src = encodeURI(url);
+  });
 }
 
 async function loadBonusVideosFromDirectory() {
@@ -1706,46 +2223,55 @@ async function loadBonusVideosFromDirectory() {
         }
       } catch (_) { /* not json listing */ }
     }
-    const names = parseDirectoryListing(text);
-    if (!names.length) return null;
-    return names.map((n) => `${BONUS_FOLDER}/${n}`);
+    const names = new Set();
+    const re = /href\s*=\s*["']([^"']+)["']/gi;
+    let m;
+    while ((m = re.exec(text))) {
+      let href = m[1];
+      try { href = decodeURIComponent(href); } catch (_) { /* keep */ }
+      href = href.split('?')[0].split('#')[0];
+      const base = href.replace(/\\/g, '/').split('/').pop();
+      if (!base || base === '..' || base.startsWith('.')) continue;
+      if (!BONUS_VIDEO_EXT.test(base)) continue;
+      names.add(base);
+    }
+    if (!names.size) return null;
+    return [...names]
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      .map((n) => `${BONUS_FOLDER}/${n}`);
   } catch (_) {
     return null;
   }
 }
 
 async function loadBonusVideosByProbe() {
-  const found = [];
-  const exts = ['.mov', '.mp4', '.webm', '.m4v'];
-  for (let start = 1; start <= 100; start += 10) {
-    const checks = [];
-    for (let i = start; i < start + 10; i++) {
-      for (const ext of exts) {
-        const p = `${BONUS_FOLDER}/bonus_${i}${ext}`;
-        checks.push(probeUrl(p).then((ok) => (ok ? p : null)));
-      }
-    }
-    const hits = (await Promise.all(checks)).filter(Boolean);
-    if (!hits.length) {
-      if (found.length || start > 1) break;
-      continue;
-    }
-    found.push(...hits);
+  const checks = [];
+  for (let i = 1; i <= 40; i++) {
+    checks.push(probeVideoFile(`${BONUS_FOLDER}/bonus_${i}.mov`));
   }
-  return [...new Set(found)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const results = await Promise.all(checks);
+  const found = [];
+  for (let i = 0; i < results.length; i++) {
+    if (results[i]) found.push(`${BONUS_FOLDER}/bonus_${i + 1}.mov`);
+  }
+  return found;
 }
 
 async function loadBonusVideos() {
-  const fromDir = await loadBonusVideosFromDirectory();
-  if (fromDir && fromDir.length) return fromDir;
+  const set = new Set();
 
-  const fromProbe = await loadBonusVideosByProbe();
-  if (fromProbe.length) return fromProbe;
-
-  if (Array.isArray(window.BONUS_VIDEOS) && window.BONUS_VIDEOS.length) {
-    return window.BONUS_VIDEOS.slice();
+  if (Array.isArray(window.BONUS_VIDEOS)) {
+    window.BONUS_VIDEOS.forEach((p) => set.add(p));
   }
-  return [];
+
+  const fromDir = await loadBonusVideosFromDirectory();
+  if (fromDir) fromDir.forEach((p) => set.add(p));
+
+  // Video-element probe works on file:// and local servers (fetch/HEAD often does not)
+  const probed = await loadBonusVideosByProbe();
+  probed.forEach((p) => set.add(p));
+
+  return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
 function applyConfig(config) {
@@ -1781,6 +2307,11 @@ async function loadConfig() {
     }
   }
   CONFIG.bonusVideos = await loadBonusVideos();
+  if (CONFIG.bonusVideos.length) {
+    console.log('Bonus videos ready:', CONFIG.bonusVideos.length);
+  } else {
+    console.warn('No bonus videos discovered');
+  }
 }
 
 loadConfig();
