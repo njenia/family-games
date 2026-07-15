@@ -107,7 +107,7 @@ window.EXERCISES_CONFIG = {
     },
     {
       "id": "thumb-l",
-      "name": "Thumb L Shape",
+      "name": "Cup Hold",
       "hint": "Move your thumb away from your hand to form an \"L\" — like holding a cup.",
       "emoji": "🤟",
       "picture": null,
@@ -116,8 +116,8 @@ window.EXERCISES_CONFIG = {
       "workSeconds": 5,
       "restSeconds": 4,
       "videos": {
-        "work": "video/thumb-l work.mov",
-        "rest": "video/thumb-l rest.mov"
+        "work": "video/cup-hold work.mov",
+        "rest": "video/cup-hold rest.mov"
       }
     },
     {

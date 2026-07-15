@@ -1,0 +1,15 @@
+{
+  "name": "gabby-physio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gabby's Physio Adventure — exercise app with accounts and session tracking",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "sync": "node sync-config.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "express": "^5.1.0"
+  }
+}

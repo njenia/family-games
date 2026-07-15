@@ -398,6 +398,130 @@
     text-transform: uppercase;
     color: var(--rest);
   }
+
+  /* ============ auth ============ */
+  .auth-tabs { display: flex; gap: 8px; }
+  .auth-tab {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: rgba(255,255,255,0.75);
+    padding: 8px 20px;
+    border-radius: 999px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .auth-tab.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #2b1055;
+  }
+  .auth-form { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 300px; }
+  .auth-form input {
+    font-size: 1.05rem;
+    padding: 12px 16px;
+    border-radius: 14px;
+    border: 2px solid rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    outline: none;
+    text-align: center;
+  }
+  .auth-form input::placeholder { color: rgba(255,255,255,0.55); }
+  .auth-form input:focus { border-color: var(--accent); }
+
+  #user-chip {
+    position: fixed;
+    top: 10px;
+    right: 12px;
+    z-index: 20;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.8);
+  }
+  #user-chip.active { display: flex; }
+  #user-chip button {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  /* ============ today progress stars ============ */
+  .stars-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    font-size: clamp(1.9rem, 8vw, 2.6rem);
+    min-height: 1.2em;
+  }
+  .stars-row .star { line-height: 1; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.35)); }
+  .stars-row .star.empty { opacity: 0.35; }
+  .stars-row .star.new {
+    animation: star-stamp 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  @keyframes star-stamp {
+    0%   { transform: scale(4) rotate(-540deg); opacity: 0; }
+    60%  { transform: scale(0.8) rotate(20deg); opacity: 1; }
+    80%  { transform: scale(1.25) rotate(-8deg); }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+
+  #goal-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.95rem;
+    color: rgba(255,255,255,0.85);
+  }
+  #goal-row button {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    font-size: 1.2rem;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+  }
+  #goal-row button:hover { background: rgba(255,255,255,0.25); }
+  #goal-num { font-size: 1.15rem; font-weight: 800; color: var(--accent); min-width: 1.4em; text-align: center; }
+
+  /* ============ history ============ */
+  #history-wrap {
+    width: 100%;
+    max-height: 55vh;
+    overflow-y: auto;
+    border-radius: 16px;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  #history-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+  #history-table th, #history-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+  }
+  #history-table th {
+    position: sticky; top: 0;
+    background: #3a2070;
+    color: var(--accent);
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  #history-table td.marks { font-size: 1.15rem; letter-spacing: 2px; }
+  #history-table tr.today td { background: rgba(255,215,0,0.1); }
+  #history-table td.count { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #history-table .goal-met { color: var(--go); font-weight: 700; }
+  #history-empty { padding: 24px; color: rgba(255,255,255,0.7); text-align: center; }
 </style>
 </head>
 <body>
@@ -405,14 +529,55 @@
 <div id="flash"></div>
 <img id="gabby-pong" src="gabby.png" alt="">
 
+<div id="user-chip">
+  <span id="user-chip-name"></span>
+  <button id="btn-logout" type="button">Log out</button>
+</div>
+
 <div id="app">
 
-  <section id="screen-start" class="screen active">
+  <section id="screen-auth" class="screen">
+    <img class="gabby-face" src="gabby.png" alt="Gabby" style="animation: bob 2s ease-in-out infinite;">
+    <h1>Gabby's Physio Adventure</h1>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" type="button">Log in</button>
+      <button class="auth-tab" id="tab-register" type="button">New player</button>
+    </div>
+    <form class="auth-form" id="auth-form">
+      <input id="auth-username" type="text" placeholder="Username" autocomplete="username" required>
+      <input id="auth-displayname" type="text" placeholder="Your name (shown in app)" hidden>
+      <input id="auth-pin" type="password" placeholder="PIN" autocomplete="current-password" required>
+      <button class="big" id="btn-auth" type="submit">Log in</button>
+    </form>
+    <p class="error" id="auth-error" hidden></p>
+  </section>
+
+  <section id="screen-start" class="screen">
     <img id="face-start" class="gabby-face" src="gabby.png" alt="Gabby">
     <h1 id="app-title">Gabby's Physio Adventure</h1>
+    <div class="stars-row" id="today-stars"></div>
     <p class="subtitle" id="start-blurb">Loading exercises…</p>
     <p class="error" id="load-error" hidden></p>
     <button class="big" id="btn-start" disabled>Let's Go!</button>
+    <div id="goal-row">
+      <span>Daily goal:</span>
+      <button id="btn-goal-minus" type="button" aria-label="Decrease daily goal">−</button>
+      <span id="goal-num">3</span>
+      <button id="btn-goal-plus" type="button" aria-label="Increase daily goal">+</button>
+    </div>
+    <button class="ghost" id="btn-history">📋 All my sessions</button>
+  </section>
+
+  <section id="screen-history" class="screen">
+    <h1>My Sessions</h1>
+    <div id="history-wrap">
+      <table id="history-table">
+        <thead><tr><th>Day</th><th>Sessions</th><th>Done</th></tr></thead>
+        <tbody id="history-body"></tbody>
+      </table>
+      <div id="history-empty" hidden>No sessions yet — do your first one!</div>
+    </div>
+    <button class="ghost" id="btn-history-back">← Back</button>
   </section>
 
   <section id="screen-workout" class="screen">
@@ -466,8 +631,10 @@
     <div id="trophy">🏆</div>
     <img id="face-finish" class="gabby-face" src="gabby.png" alt="Gabby">
     <h1>You did it, Gabby!</h1>
+    <div class="stars-row" id="finish-stars"></div>
     <p class="subtitle" id="finish-blurb">All exercises complete!</p>
     <button class="big" id="btn-restart">Play Again</button>
+    <button class="ghost" id="btn-finish-home">🏠 Home</button>
   </section>
 </div>
 
@@ -1313,7 +1480,14 @@ const CELEBRATION_FX = [
 
 /* ============================== helpers ============================== */
 const $ = id => document.getElementById(id);
-const screens = { start: $('screen-start'), workout: $('screen-workout'), between: $('screen-between'), finish: $('screen-finish') };
+const screens = {
+  auth: $('screen-auth'),
+  start: $('screen-start'),
+  history: $('screen-history'),
+  workout: $('screen-workout'),
+  between: $('screen-between'),
+  finish: $('screen-finish'),
+};
 const RING_LEN = 2 * Math.PI * 52;
 $('ring-fill').style.strokeDasharray = RING_LEN;
 
@@ -1543,7 +1717,40 @@ const state = {
   celebrationTimerId: null,
   lastBonusIndex: -1,
   gabbyRep: 0,
+  // server session tracking
+  sessionId: null,
+  exercisesDone: 0,
 };
+
+/* ============================== account / api ============================== */
+const TOKEN_KEY = 'gabby_token';
+let ME = null;      // { user, today } from /api/me
+
+function getToken() { return localStorage.getItem(TOKEN_KEY); }
+
+function localDateStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+async function api(method, url, body) {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(url, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && !url.includes('/api/login') && !url.includes('/api/register')) {
+    localStorage.removeItem(TOKEN_KEY);
+    showAuth();
+    throw new Error(data.error || 'Please log in');
+  }
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
 
 function showScreen(name) {
   Object.values(screens).forEach(s => s.classList.remove('active'));
@@ -1702,7 +1909,15 @@ function completeExercise() {
   stopDemoVideo();
   setWorkoutMusic(null);
   renderReps('rest');
+  state.exercisesDone++;
+  reportProgress();
   celebrate();
+}
+
+function reportProgress() {
+  if (!state.sessionId) return;
+  api('PATCH', `/api/sessions/${state.sessionId}`, { exercisesCompleted: state.exercisesDone })
+    .catch(() => {});
 }
 
 /* ---------- timed mode ---------- */
@@ -2085,20 +2300,53 @@ function finishSession() {
   state.between = false;
   setWorkoutMusic(null);
   $('finish-blurb').textContent = `All ${EXERCISES.length} exercises complete!`;
+  $('finish-stars').innerHTML = '';
   showScreen('finish');
   sounds.finale();
   confettiBurst();
   fireworks();
   startFx();
+  recordSessionComplete();
+}
+
+async function recordSessionComplete() {
+  if (!state.sessionId) return;
+  const id = state.sessionId;
+  state.sessionId = null;
+  try {
+    const data = await api('PATCH', `/api/sessions/${id}`, {
+      status: 'completed',
+      exercisesCompleted: state.exercisesDone,
+    });
+    if (ME) ME.today = data.today;
+    const { completed, goal } = data.today;
+    const left = Math.max(0, goal - completed);
+    $('finish-blurb').textContent = left === 0
+      ? `Session ${completed} of ${goal} today — daily goal reached!! 🎉`
+      : `Session ${completed} of ${goal} today — ${left} more to go!`;
+    // stamp the freshly earned star after a beat
+    setTimeout(() => {
+      renderStars($('finish-stars'), completed, goal, true);
+      sounds.sparkle();
+    }, 600);
+    renderStartScreen();
+  } catch (err) {
+    $('finish-blurb').textContent = 'All exercises complete! (could not save session: ' + err.message + ')';
+  }
 }
 
 function beginSession() {
   ctx();
   state.exercise = 0;
   state.paused = false;
+  state.exercisesDone = 0;
+  state.sessionId = null;
   music.muted = false;
   stopBetweenTimer();
   stopDemoVideo();
+  api('POST', '/api/sessions', { localDate: localDateStr(), exercisesTotal: EXERCISES.length })
+    .then((data) => { state.sessionId = data.id; })
+    .catch(() => {});
   buildProgressDots();
   startBetween();
 }
@@ -2148,6 +2396,7 @@ $('btn-count').addEventListener('click', onCountTap);
 $('btn-skip-between').addEventListener('click', endBetweenEarly);
 
 document.addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
   if (e.code === 'Space' || e.key === ' ') {
     e.preventDefault();
     if (state.between) {
@@ -2282,39 +2531,208 @@ function applyConfig(config) {
     document.title = config.title;
     $('app-title').textContent = `🤸 ${config.title} 🤸`;
   }
-  $('start-blurb').innerHTML =
-    `${EXERCISES.length} hand & wrist physio exercises<br>` +
-    `Configured in exercises.json · pictures & timings per move<br>` +
-    `Finish each exercise for a surprise party! 🎉`;
   $('btn-start').disabled = EXERCISES.length === 0;
 }
 
-async function loadConfig() {
+/* ============================== auth ui ============================== */
+let authMode = 'login';
+
+function setAuthMode(mode) {
+  authMode = mode;
+  $('tab-login').classList.toggle('active', mode === 'login');
+  $('tab-register').classList.toggle('active', mode === 'register');
+  $('auth-displayname').hidden = mode === 'login';
+  $('btn-auth').textContent = mode === 'login' ? 'Log in' : 'Create account';
+  $('auth-error').hidden = true;
+}
+
+function showAuth() {
+  ME = null;
+  $('user-chip').classList.remove('active');
+  setAuthMode('login');
+  showScreen('auth');
+}
+
+$('tab-login').addEventListener('click', () => setAuthMode('login'));
+$('tab-register').addEventListener('click', () => setAuthMode('register'));
+
+$('auth-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('btn-auth');
+  btn.disabled = true;
+  $('auth-error').hidden = true;
   try {
-    const res = await fetch('exercises.json', { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    applyConfig(await res.json());
+    const payload = {
+      username: $('auth-username').value,
+      pin: $('auth-pin').value,
+    };
+    if (authMode === 'register') payload.displayName = $('auth-displayname').value;
+    const data = await api('POST', authMode === 'login' ? '/api/login' : '/api/register', payload);
+    localStorage.setItem(TOKEN_KEY, data.token);
+    $('auth-pin').value = '';
+    await enterApp();
   } catch (err) {
-    if (window.EXERCISES_CONFIG) {
-      applyConfig(window.EXERCISES_CONFIG);
-    } else {
-      $('load-error').hidden = false;
-      $('load-error').textContent =
-        'Could not load exercises.json. Open via a local server (not file://), e.g. `npx serve gabby-physio`.';
-      $('start-blurb').textContent = 'Exercises failed to load.';
-      console.error(err);
-      return;
-    }
+    $('auth-error').hidden = false;
+    $('auth-error').textContent = err.message;
+  } finally {
+    btn.disabled = false;
   }
-  CONFIG.bonusVideos = await loadBonusVideos();
-  if (CONFIG.bonusVideos.length) {
-    console.log('Bonus videos ready:', CONFIG.bonusVideos.length);
-  } else {
-    console.warn('No bonus videos discovered');
+});
+
+$('btn-logout').addEventListener('click', async () => {
+  try { await api('POST', '/api/logout'); } catch (_) {}
+  localStorage.removeItem(TOKEN_KEY);
+  showAuth();
+});
+
+/* ============================== start screen / stars ============================== */
+
+/** Fill a stars row: `completed` earned stars against `goal`; extra sessions beyond goal still count. */
+function renderStars(container, completed, goal, animateLast = false) {
+  container.innerHTML = '';
+  const total = Math.max(goal, completed);
+  for (let i = 0; i < total; i++) {
+    const s = document.createElement('span');
+    s.className = 'star' + (i < completed ? '' : ' empty');
+    s.textContent = i < completed ? '⭐' : '☆';
+    if (animateLast && i === completed - 1) s.classList.add('new');
+    container.appendChild(s);
   }
 }
 
-loadConfig();
+function renderStartScreen() {
+  if (!ME) return;
+  const { completed, goal } = ME.today;
+  const left = Math.max(0, goal - completed);
+  const name = ME.user.displayName || ME.user.username;
+  renderStars($('today-stars'), completed, goal);
+  $('goal-num').textContent = goal;
+  $('start-blurb').innerHTML =
+    `Hi ${name}! ${EXERCISES.length} exercises per session.<br>` +
+    (left === 0
+      ? `Daily goal done — ${completed} session${completed === 1 ? '' : 's'} today! Extra ones earn bonus stars ✨`
+      : `${completed} of ${goal} sessions done today · ${left} to go!`);
+  $('user-chip-name').textContent = name;
+  $('user-chip').classList.add('active');
+}
+
+async function changeGoal(delta) {
+  if (!ME) return;
+  const next = Math.min(20, Math.max(1, ME.user.dailyGoal + delta));
+  if (next === ME.user.dailyGoal) return;
+  try {
+    const data = await api('PATCH', '/api/me', { dailyGoal: next });
+    ME.user = data.user;
+    ME.today.goal = data.user.dailyGoal;
+    renderStartScreen();
+  } catch (_) {}
+}
+$('btn-goal-minus').addEventListener('click', () => changeGoal(-1));
+$('btn-goal-plus').addEventListener('click', () => changeGoal(1));
+
+/* ============================== history ============================== */
+
+function friendlyDate(iso) {
+  const today = localDateStr();
+  if (iso === today) return 'Today';
+  const d = new Date(iso + 'T12:00:00');
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yIso = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+  if (iso === yIso) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+async function showHistory() {
+  try {
+    const data = await api('GET', '/api/sessions?limit=365');
+    const goal = data.goal;
+    const byDate = new Map();
+    for (const s of data.sessions) {
+      if (!byDate.has(s.local_date)) byDate.set(s.local_date, []);
+      byDate.get(s.local_date).push(s);
+    }
+    const body = $('history-body');
+    body.innerHTML = '';
+    for (const [date, sessions] of byDate) {
+      const done = sessions.filter((s) => s.status === 'completed').length;
+      const tr = document.createElement('tr');
+      if (date === localDateStr()) tr.classList.add('today');
+
+      const tdDate = document.createElement('td');
+      tdDate.textContent = friendlyDate(date);
+
+      const tdMarks = document.createElement('td');
+      tdMarks.className = 'marks';
+      tdMarks.textContent = done > 0 ? '⭐'.repeat(done) : '—';
+
+      const tdCount = document.createElement('td');
+      tdCount.className = 'count' + (done >= goal ? ' goal-met' : '');
+      tdCount.textContent = `${done} / ${goal}${done >= goal ? ' 🏅' : ''}`;
+
+      tr.append(tdDate, tdMarks, tdCount);
+      body.appendChild(tr);
+    }
+    $('history-empty').hidden = byDate.size > 0;
+    showScreen('history');
+  } catch (err) {
+    console.error(err);
+  }
+}
+async function refreshMe() {
+  try {
+    ME = await api('GET', `/api/me?date=${localDateStr()}`);
+    renderStartScreen();
+  } catch (_) {}
+}
+
+$('btn-history').addEventListener('click', showHistory);
+$('btn-history-back').addEventListener('click', () => { renderStartScreen(); showScreen('start'); refreshMe(); });
+$('btn-finish-home').addEventListener('click', () => {
+  particles = [];
+  renderStartScreen();
+  showScreen('start');
+  refreshMe();
+});
+
+/* ============================== boot ============================== */
+
+async function enterApp() {
+  const [me, scheme] = await Promise.all([
+    api('GET', `/api/me?date=${localDateStr()}`),
+    api('GET', '/api/scheme'),
+  ]);
+  ME = me;
+  applyConfig(scheme.config);
+  renderStartScreen();
+  showScreen('start');
+  CONFIG.bonusVideos = await loadBonusVideos();
+}
+
+// Coming back to the tab (or after midnight): refresh today's count so progress
+// done on another device shows up.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && ME && screens.start.classList.contains('active')) refreshMe();
+});
+
+async function boot() {
+  if (!getToken()) {
+    showAuth();
+    return;
+  }
+  try {
+    await enterApp();
+  } catch (err) {
+    // 401 already routed to the auth screen inside api(); anything else is a server problem
+    if (getToken()) {
+      showAuth();
+      $('auth-error').hidden = false;
+      $('auth-error').textContent = 'Could not reach the server: ' + err.message;
+    }
+  }
+}
+
+boot();
 </script>
 </body>
 </html>
