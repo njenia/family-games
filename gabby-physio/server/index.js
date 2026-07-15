@@ -1,29 +1,36 @@
 'use strict';
 const path = require('path');
 const fs = require('fs');
-const crypto = require('crypto');
 const express = require('express');
-const db = require('./db');
+const { createClient } = require('@supabase/supabase-js');
+
+const root = path.join(__dirname, '..');
+try { process.loadEnvFile(path.join(root, '.env')); } catch (_) { /* no .env file — fine on Render */ }
+
+const { SUPABASE_URL, SUPABASE_SECRET_KEY, SUPABASE_PUBLISHABLE_KEY } = process.env;
+if (!SUPABASE_URL || !SUPABASE_SECRET_KEY || !SUPABASE_PUBLISHABLE_KEY) {
+  console.error('Missing environment variables. Required:');
+  console.error('  SUPABASE_URL, SUPABASE_SECRET_KEY, SUPABASE_PUBLISHABLE_KEY');
+  console.error('Locally: copy .env.example to .env and fill in your Supabase project values.');
+  process.exit(1);
+}
+
+// Server-side client with the secret key: full DB access, bypasses RLS.
+const sb = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
 
 const PORT = process.env.PORT || 3210;
-const root = path.join(__dirname, '..');
-
 const app = express();
 app.use(express.json());
 
 /* ============================== helpers ============================== */
 
-function hashPin(pin) {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(String(pin), salt, 32).toString('hex');
-  return `${salt}:${hash}`;
-}
+// Usernames are mapped to synthetic emails for Supabase Auth; no mail is ever sent.
+const EMAIL_DOMAIN = 'gabby.example.com';
+const emailFor = (username) => `${String(username).trim().toLowerCase()}@${EMAIL_DOMAIN}`;
 
-function verifyPin(pin, stored) {
-  const [salt, hash] = stored.split(':');
-  const candidate = crypto.scryptSync(String(pin), salt, 32).toString('hex');
-  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(candidate, 'hex'));
-}
+const wrap = (fn) => (req, res, next) => fn(req, res, next).catch(next);
 
 function defaultSchemeConfig() {
   const cfg = JSON.parse(fs.readFileSync(path.join(root, 'exercises.json'), 'utf8'));
@@ -31,198 +38,256 @@ function defaultSchemeConfig() {
   return cfg;
 }
 
-function publicUser(u) {
-  return { id: u.id, username: u.username, displayName: u.display_name, dailyGoal: u.daily_goal };
-}
-
-function activeScheme(userId) {
-  return db.prepare(
-    'SELECT * FROM schemes WHERE user_id = ? AND is_active = 1 ORDER BY id DESC LIMIT 1'
-  ).get(userId);
+function publicUser(profile) {
+  return {
+    id: profile.user_id,
+    username: profile.username,
+    displayName: profile.display_name,
+    dailyGoal: profile.daily_goal,
+  };
 }
 
 function isValidLocalDate(s) {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
-function todayStats(userId, localDate) {
-  const row = db.prepare(
-    "SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND local_date = ? AND status = 'completed'"
-  ).get(userId, localDate);
-  return row.n;
+async function activeScheme(userId) {
+  const { data, error } = await sb.from('schemes')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function todayStats(userId, localDate) {
+  const { count, error } = await sb.from('sessions')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('local_date', localDate)
+    .eq('status', 'completed');
+  if (error) throw error;
+  return count || 0;
 }
 
 /* ============================== auth ============================== */
 
-function issueToken(userId) {
-  const token = crypto.randomBytes(32).toString('hex');
-  db.prepare('INSERT INTO auth_tokens (token, user_id) VALUES (?, ?)').run(token, userId);
-  return token;
+async function requireAuth(req, res, next) {
+  try {
+    const header = req.headers.authorization || '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+    if (!token) return res.status(401).json({ error: 'Not logged in' });
+
+    const { data, error } = await sb.auth.getUser(token);
+    if (error || !data.user) {
+      return res.status(401).json({ error: 'Session expired, please log in again' });
+    }
+    const { data: profile, error: pErr } = await sb.from('profiles')
+      .select('*').eq('user_id', data.user.id).single();
+    if (pErr || !profile) return res.status(401).json({ error: 'Account profile missing' });
+
+    req.user = profile;
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
-function requireAuth(req, res, next) {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'Not logged in' });
-  const row = db.prepare(
-    `SELECT u.* FROM auth_tokens t JOIN users u ON u.id = t.user_id WHERE t.token = ?`
-  ).get(token);
-  if (!row) return res.status(401).json({ error: 'Session expired, please log in again' });
-  db.prepare("UPDATE auth_tokens SET last_seen_at = datetime('now') WHERE token = ?").run(token);
-  req.user = row;
-  req.token = token;
-  next();
-}
+// The browser needs these to create its own Supabase client (login + token refresh).
+// The publishable key is safe to expose.
+app.get('/api/config', (req, res) => {
+  res.json({ supabaseUrl: SUPABASE_URL, supabasePublishableKey: SUPABASE_PUBLISHABLE_KEY });
+});
 
-app.post('/api/register', (req, res) => {
-  const { username, displayName, pin, dailyGoal } = req.body || {};
+// Registration is server-side so we can enforce username uniqueness and seed
+// the profile + default scheme atomically-ish. Login happens in the browser
+// via supabase-js (which then auto-refreshes tokens).
+app.post('/api/register', wrap(async (req, res) => {
+  const { username, displayName, pin } = req.body || {};
   const name = String(username || '').trim();
   if (!/^[a-zA-Z0-9_-]{2,24}$/.test(name)) {
     return res.status(400).json({ error: 'Username: 2-24 letters, numbers, - or _' });
   }
-  if (!pin || String(pin).length < 4) {
-    return res.status(400).json({ error: 'PIN must be at least 4 characters' });
+  if (!pin || String(pin).length < 6) {
+    return res.status(400).json({ error: 'PIN must be at least 6 characters' });
   }
-  const goal = Math.min(20, Math.max(1, parseInt(dailyGoal, 10) || 3));
-  try {
-    const result = db.prepare(
-      'INSERT INTO users (username, display_name, pin_hash, daily_goal) VALUES (?, ?, ?, ?)'
-    ).run(name, String(displayName || name).trim() || name, hashPin(pin), goal);
-    const userId = result.lastInsertRowid;
-    db.prepare(
-      'INSERT INTO schemes (user_id, name, config_json) VALUES (?, ?, ?)'
-    ).run(userId, 'My exercises', JSON.stringify(defaultSchemeConfig()));
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    res.json({ token: issueToken(userId), user: publicUser(user) });
-  } catch (err) {
-    if (String(err.message).includes('UNIQUE')) {
+
+  const { data: existing, error: exErr } = await sb.from('profiles')
+    .select('user_id').ilike('username', name).maybeSingle();
+  if (exErr) throw exErr;
+  if (existing) return res.status(409).json({ error: 'That username is taken' });
+
+  const { data: created, error: cErr } = await sb.auth.admin.createUser({
+    email: emailFor(name),
+    password: String(pin),
+    email_confirm: true,
+  });
+  if (cErr) {
+    if (/already|registered|exists/i.test(cErr.message)) {
       return res.status(409).json({ error: 'That username is taken' });
     }
-    throw err;
+    throw cErr;
   }
-});
+  const userId = created.user.id;
 
-app.post('/api/login', (req, res) => {
-  const { username, pin } = req.body || {};
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(String(username || '').trim());
-  if (!user || !verifyPin(pin || '', user.pin_hash)) {
-    return res.status(401).json({ error: 'Wrong username or PIN' });
+  const { error: pErr } = await sb.from('profiles').insert({
+    user_id: userId,
+    username: name,
+    display_name: String(displayName || name).trim() || name,
+    daily_goal: 3,
+  });
+  if (pErr) {
+    await sb.auth.admin.deleteUser(userId).catch(() => {});
+    throw pErr;
   }
-  res.json({ token: issueToken(user.id), user: publicUser(user) });
-});
+  const { error: sErr } = await sb.from('schemes').insert({
+    user_id: userId,
+    name: 'My exercises',
+    config: defaultSchemeConfig(),
+  });
+  if (sErr) throw sErr;
 
-app.post('/api/logout', requireAuth, (req, res) => {
-  db.prepare('DELETE FROM auth_tokens WHERE token = ?').run(req.token);
   res.json({ ok: true });
-});
+}));
 
 /* ============================== account ============================== */
 
-app.get('/api/me', requireAuth, (req, res) => {
-  const date = isValidLocalDate(req.query.date) ? req.query.date : new Date().toISOString().slice(0, 10);
+app.get('/api/me', requireAuth, wrap(async (req, res) => {
+  const date = isValidLocalDate(req.query.date)
+    ? req.query.date
+    : new Date().toISOString().slice(0, 10);
   res.json({
     user: publicUser(req.user),
-    today: { date, completed: todayStats(req.user.id, date), goal: req.user.daily_goal },
+    today: { date, completed: await todayStats(req.user.user_id, date), goal: req.user.daily_goal },
   });
-});
+}));
 
-app.patch('/api/me', requireAuth, (req, res) => {
+app.patch('/api/me', requireAuth, wrap(async (req, res) => {
   const { dailyGoal, displayName } = req.body || {};
+  const patch = {};
   if (dailyGoal !== undefined) {
     const goal = parseInt(dailyGoal, 10);
     if (!(goal >= 1 && goal <= 20)) return res.status(400).json({ error: 'Daily goal must be 1-20' });
-    db.prepare('UPDATE users SET daily_goal = ? WHERE id = ?').run(goal, req.user.id);
+    patch.daily_goal = goal;
   }
   if (displayName !== undefined) {
     const dn = String(displayName).trim();
     if (!dn) return res.status(400).json({ error: 'Display name cannot be empty' });
-    db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(dn, req.user.id);
+    patch.display_name = dn;
   }
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-  res.json({ user: publicUser(user) });
-});
+  const { data, error } = await sb.from('profiles')
+    .update(patch).eq('user_id', req.user.user_id).select().single();
+  if (error) throw error;
+  res.json({ user: publicUser(data) });
+}));
 
 /* ============================== scheme ============================== */
 
-app.get('/api/scheme', requireAuth, (req, res) => {
-  const scheme = activeScheme(req.user.id);
+app.get('/api/scheme', requireAuth, wrap(async (req, res) => {
+  const scheme = await activeScheme(req.user.user_id);
   if (!scheme) return res.status(404).json({ error: 'No exercise scheme found' });
-  res.json({ id: scheme.id, name: scheme.name, config: JSON.parse(scheme.config_json) });
-});
+  res.json({ id: scheme.id, name: scheme.name, config: scheme.config });
+}));
 
-app.put('/api/scheme', requireAuth, (req, res) => {
+app.put('/api/scheme', requireAuth, wrap(async (req, res) => {
   const { config, name } = req.body || {};
   if (!config || !Array.isArray(config.exercises)) {
     return res.status(400).json({ error: 'config.exercises must be an array' });
   }
-  const scheme = activeScheme(req.user.id);
+  const scheme = await activeScheme(req.user.user_id);
   if (!scheme) return res.status(404).json({ error: 'No exercise scheme found' });
-  db.prepare(
-    "UPDATE schemes SET config_json = ?, name = COALESCE(?, name), updated_at = datetime('now') WHERE id = ?"
-  ).run(JSON.stringify(config), name ? String(name) : null, scheme.id);
+  const patch = { config, updated_at: new Date().toISOString() };
+  if (name) patch.name = String(name);
+  const { error } = await sb.from('schemes').update(patch).eq('id', scheme.id);
+  if (error) throw error;
   res.json({ ok: true });
-});
+}));
 
 /* ============================== sessions ============================== */
 
-app.post('/api/sessions', requireAuth, (req, res) => {
+app.post('/api/sessions', requireAuth, wrap(async (req, res) => {
   const { localDate, exercisesTotal } = req.body || {};
-  if (!isValidLocalDate(localDate)) return res.status(400).json({ error: 'localDate must be YYYY-MM-DD' });
+  if (!isValidLocalDate(localDate)) {
+    return res.status(400).json({ error: 'localDate must be YYYY-MM-DD' });
+  }
   // A new session supersedes any still-open one (e.g. browser closed mid-workout)
-  db.prepare(
-    "UPDATE sessions SET status = 'abandoned', finished_at = datetime('now') WHERE user_id = ? AND status = 'in_progress'"
-  ).run(req.user.id);
-  const scheme = activeScheme(req.user.id);
-  const result = db.prepare(
-    'INSERT INTO sessions (user_id, scheme_id, local_date, exercises_total) VALUES (?, ?, ?, ?)'
-  ).run(req.user.id, scheme ? scheme.id : null, localDate, Math.max(0, parseInt(exercisesTotal, 10) || 0));
-  res.json({ id: result.lastInsertRowid });
-});
+  const { error: abErr } = await sb.from('sessions')
+    .update({ status: 'abandoned', finished_at: new Date().toISOString() })
+    .eq('user_id', req.user.user_id)
+    .eq('status', 'in_progress');
+  if (abErr) throw abErr;
 
-app.patch('/api/sessions/:id', requireAuth, (req, res) => {
-  const session = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?')
-    .get(req.params.id, req.user.id);
+  const scheme = await activeScheme(req.user.user_id);
+  const { data, error } = await sb.from('sessions').insert({
+    user_id: req.user.user_id,
+    scheme_id: scheme ? scheme.id : null,
+    local_date: localDate,
+    exercises_total: Math.max(0, parseInt(exercisesTotal, 10) || 0),
+  }).select('id').single();
+  if (error) throw error;
+  res.json({ id: data.id });
+}));
+
+app.patch('/api/sessions/:id', requireAuth, wrap(async (req, res) => {
+  const { data: session, error: gErr } = await sb.from('sessions')
+    .select('*').eq('id', req.params.id).eq('user_id', req.user.user_id).maybeSingle();
+  if (gErr) throw gErr;
   if (!session) return res.status(404).json({ error: 'Session not found' });
 
   const { exercisesCompleted, status } = req.body || {};
+  const patch = {};
   if (exercisesCompleted !== undefined) {
-    db.prepare('UPDATE sessions SET exercises_completed = ? WHERE id = ?')
-      .run(Math.max(0, parseInt(exercisesCompleted, 10) || 0), session.id);
+    patch.exercises_completed = Math.max(0, parseInt(exercisesCompleted, 10) || 0);
   }
   if (status !== undefined) {
     if (!['in_progress', 'completed', 'abandoned'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
-    db.prepare(
-      "UPDATE sessions SET status = ?, finished_at = CASE WHEN ? IN ('completed','abandoned') THEN datetime('now') ELSE finished_at END WHERE id = ?"
-    ).run(status, status, session.id);
+    patch.status = status;
+    if (status === 'completed' || status === 'abandoned') {
+      patch.finished_at = new Date().toISOString();
+    }
   }
 
-  const updated = db.prepare('SELECT * FROM sessions WHERE id = ?').get(session.id);
+  const { data: updated, error: uErr } = await sb.from('sessions')
+    .update(patch).eq('id', session.id).select().single();
+  if (uErr) throw uErr;
+
   res.json({
     session: updated,
     today: {
       date: updated.local_date,
-      completed: todayStats(req.user.id, updated.local_date),
+      completed: await todayStats(req.user.user_id, updated.local_date),
       goal: req.user.daily_goal,
     },
   });
-});
+}));
 
-app.get('/api/sessions', requireAuth, (req, res) => {
+app.get('/api/sessions', requireAuth, wrap(async (req, res) => {
   const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 100));
-  const rows = db.prepare(
-    `SELECT id, status, local_date, exercises_total, exercises_completed, started_at, finished_at
-     FROM sessions WHERE user_id = ? ORDER BY started_at DESC, id DESC LIMIT ?`
-  ).all(req.user.id, limit);
-  res.json({ sessions: rows, goal: req.user.daily_goal });
-});
+  const { data, error } = await sb.from('sessions')
+    .select('id, status, local_date, exercises_total, exercises_completed, started_at, finished_at')
+    .eq('user_id', req.user.user_id)
+    .order('started_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  res.json({ sessions: data, goal: req.user.daily_goal });
+}));
 
 /* ============================== static app ============================== */
 
 app.use(express.static(root));
 
+app.use((err, req, res, next) => {
+  console.error(err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Server error' });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Gabby's Physio running at http://localhost:${PORT}`);
-  console.log('Other devices on your network can use http://<this-computer-ip>:' + PORT);
 });

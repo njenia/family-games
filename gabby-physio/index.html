@@ -546,7 +546,7 @@
     <form class="auth-form" id="auth-form">
       <input id="auth-username" type="text" placeholder="Username" autocomplete="username" required>
       <input id="auth-displayname" type="text" placeholder="Your name (shown in app)" hidden>
-      <input id="auth-pin" type="password" placeholder="PIN" autocomplete="current-password" required>
+      <input id="auth-pin" type="password" placeholder="PIN (at least 6 characters)" autocomplete="current-password" required minlength="6">
       <button class="big" id="btn-auth" type="submit">Log in</button>
     </form>
     <p class="error" id="auth-error" hidden></p>
@@ -646,6 +646,7 @@
   <p id="celebration-sub">Get ready for the next one…</p>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="exercises.js"></script>
 <script src="bonus-videos.js"></script>
 <script>
@@ -1723,10 +1724,25 @@ const state = {
 };
 
 /* ============================== account / api ============================== */
-const TOKEN_KEY = 'gabby_token';
-let ME = null;      // { user, today } from /api/me
+let sbClient = null; // Supabase browser client (auth + token refresh)
+let ME = null;       // { user, today } from /api/me
 
-function getToken() { return localStorage.getItem(TOKEN_KEY); }
+// Usernames map to synthetic emails for Supabase Auth; must match the server.
+const EMAIL_DOMAIN = 'gabby.example.com';
+const emailFor = (u) => `${String(u).trim().toLowerCase()}@${EMAIL_DOMAIN}`;
+
+async function initSupabase() {
+  const res = await fetch('/api/config');
+  if (!res.ok) throw new Error('Server not reachable');
+  const cfg = await res.json();
+  sbClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabasePublishableKey);
+}
+
+async function authToken() {
+  if (!sbClient) return null;
+  const { data } = await sbClient.auth.getSession();
+  return data.session ? data.session.access_token : null;
+}
 
 function localDateStr() {
   const d = new Date();
@@ -1735,7 +1751,7 @@ function localDateStr() {
 
 async function api(method, url, body) {
   const headers = { 'Content-Type': 'application/json' };
-  const token = getToken();
+  const token = await authToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(url, {
     method,
@@ -1743,8 +1759,8 @@ async function api(method, url, body) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  if (res.status === 401 && !url.includes('/api/login') && !url.includes('/api/register')) {
-    localStorage.removeItem(TOKEN_KEY);
+  if (res.status === 401 && !url.includes('/api/register')) {
+    if (sbClient) sbClient.auth.signOut().catch(() => {});
     showAuth();
     throw new Error(data.error || 'Please log in');
   }
@@ -2562,13 +2578,22 @@ $('auth-form').addEventListener('submit', async (e) => {
   btn.disabled = true;
   $('auth-error').hidden = true;
   try {
-    const payload = {
-      username: $('auth-username').value,
-      pin: $('auth-pin').value,
-    };
-    if (authMode === 'register') payload.displayName = $('auth-displayname').value;
-    const data = await api('POST', authMode === 'login' ? '/api/login' : '/api/register', payload);
-    localStorage.setItem(TOKEN_KEY, data.token);
+    const username = $('auth-username').value.trim();
+    const pin = $('auth-pin').value;
+    if (authMode === 'register') {
+      await api('POST', '/api/register', {
+        username,
+        pin,
+        displayName: $('auth-displayname').value,
+      });
+    }
+    const { error } = await sbClient.auth.signInWithPassword({
+      email: emailFor(username),
+      password: pin,
+    });
+    if (error) {
+      throw new Error(authMode === 'login' ? 'Wrong username or PIN' : error.message);
+    }
     $('auth-pin').value = '';
     await enterApp();
   } catch (err) {
@@ -2580,8 +2605,7 @@ $('auth-form').addEventListener('submit', async (e) => {
 });
 
 $('btn-logout').addEventListener('click', async () => {
-  try { await api('POST', '/api/logout'); } catch (_) {}
-  localStorage.removeItem(TOKEN_KEY);
+  try { await sbClient.auth.signOut(); } catch (_) {}
   showAuth();
 });
 
@@ -2716,7 +2740,15 @@ document.addEventListener('visibilitychange', () => {
 });
 
 async function boot() {
-  if (!getToken()) {
+  try {
+    await initSupabase();
+  } catch (err) {
+    showAuth();
+    $('auth-error').hidden = false;
+    $('auth-error').textContent = 'Could not reach the server: ' + err.message;
+    return;
+  }
+  if (!(await authToken())) {
     showAuth();
     return;
   }
@@ -2724,7 +2756,7 @@ async function boot() {
     await enterApp();
   } catch (err) {
     // 401 already routed to the auth screen inside api(); anything else is a server problem
-    if (getToken()) {
+    if (await authToken()) {
       showAuth();
       $('auth-error').hidden = false;
       $('auth-error').textContent = 'Could not reach the server: ' + err.message;
