@@ -21,8 +21,9 @@ const sb = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
 });
 
 const PORT = process.env.PORT || 3210;
+const AVATAR_BUCKET = 'avatars';
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '3mb' }));
 
 /* ============================== helpers ============================== */
 
@@ -44,11 +45,33 @@ function publicUser(profile) {
     username: profile.username,
     displayName: profile.display_name,
     dailyGoal: profile.daily_goal,
+    avatarUrl: profile.avatar_url || null,
   };
 }
 
 function isValidLocalDate(s) {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+/** Format a Date as YYYY-MM-DD in local calendar fields already set on the Date. */
+function formatLocalYmd(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Monday→Sunday week containing `localDate` (YYYY-MM-DD). */
+function weekDateList(localDate) {
+  const d = new Date(`${localDate}T12:00:00`);
+  const day = d.getDay(); // 0 = Sun
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + mondayOffset);
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const x = new Date(monday);
+    x.setDate(monday.getDate() + i);
+    days.push(formatLocalYmd(x));
+  }
+  return days;
 }
 
 async function activeScheme(userId) {
@@ -71,6 +94,49 @@ async function todayStats(userId, localDate) {
     .eq('status', 'completed');
   if (error) throw error;
   return count || 0;
+}
+
+async function totalCompletedSessions(userId) {
+  const { count, error } = await sb.from('sessions')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('status', 'completed');
+  if (error) throw error;
+  return count || 0;
+}
+
+async function weekStats(userId, localDate) {
+  const days = weekDateList(localDate);
+  const { data, error } = await sb.from('sessions')
+    .select('local_date')
+    .eq('user_id', userId)
+    .eq('status', 'completed')
+    .gte('local_date', days[0])
+    .lte('local_date', days[6]);
+  if (error) throw error;
+  const counts = Object.create(null);
+  for (const row of data || []) {
+    counts[row.local_date] = (counts[row.local_date] || 0) + 1;
+  }
+  return days.map((date) => ({ date, completed: counts[date] || 0 }));
+}
+
+async function ensureAvatarBucket() {
+  const { data, error } = await sb.storage.listBuckets();
+  if (error) throw error;
+  if (data && data.some((b) => b.id === AVATAR_BUCKET || b.name === AVATAR_BUCKET)) return;
+  const { error: cErr } = await sb.storage.createBucket(AVATAR_BUCKET, {
+    public: true,
+    fileSizeLimit: 2_097_152,
+    allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  });
+  if (cErr && !/already exists|duplicate/i.test(cErr.message || '')) throw cErr;
+}
+
+function parseDataUrl(dataUrl) {
+  const m = String(dataUrl || '').match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/);
+  if (!m) return null;
+  return { mime: m[1], buffer: Buffer.from(m[2].replace(/\s+/g, ''), 'base64') };
 }
 
 /* ============================== auth ============================== */
@@ -159,9 +225,16 @@ app.get('/api/me', requireAuth, wrap(async (req, res) => {
   const date = isValidLocalDate(req.query.date)
     ? req.query.date
     : new Date().toISOString().slice(0, 10);
+  const [completed, totalSessions, week] = await Promise.all([
+    todayStats(req.user.user_id, date),
+    totalCompletedSessions(req.user.user_id),
+    weekStats(req.user.user_id, date),
+  ]);
   res.json({
     user: publicUser(req.user),
-    today: { date, completed: await todayStats(req.user.user_id, date), goal: req.user.daily_goal },
+    today: { date, completed, goal: req.user.daily_goal },
+    totalSessions,
+    week,
   });
 }));
 
@@ -180,6 +253,41 @@ app.patch('/api/me', requireAuth, wrap(async (req, res) => {
   }
   const { data, error } = await sb.from('profiles')
     .update(patch).eq('user_id', req.user.user_id).select().single();
+  if (error) throw error;
+  res.json({ user: publicUser(data) });
+}));
+
+app.post('/api/me/avatar', requireAuth, wrap(async (req, res) => {
+  const parsed = parseDataUrl(req.body && req.body.image);
+  if (!parsed) {
+    return res.status(400).json({ error: 'Send a JPEG, PNG, or WebP data URL in { image }' });
+  }
+  if (parsed.buffer.length > 2_097_152) {
+    return res.status(400).json({ error: 'Image too large (max 2 MB)' });
+  }
+
+  await ensureAvatarBucket();
+
+  const ext = parsed.mime === 'image/png' ? 'png' : parsed.mime === 'image/webp' ? 'webp' : 'jpg';
+  const objectPath = `${req.user.user_id}/avatar.${ext}`;
+
+  const { error: upErr } = await sb.storage
+    .from(AVATAR_BUCKET)
+    .upload(objectPath, parsed.buffer, {
+      contentType: parsed.mime,
+      upsert: true,
+      cacheControl: '3600',
+    });
+  if (upErr) throw upErr;
+
+  const { data: pub } = sb.storage.from(AVATAR_BUCKET).getPublicUrl(objectPath);
+  const avatarUrl = `${pub.publicUrl}?v=${Date.now()}`;
+
+  const { data, error } = await sb.from('profiles')
+    .update({ avatar_url: avatarUrl })
+    .eq('user_id', req.user.user_id)
+    .select()
+    .single();
   if (error) throw error;
   res.json({ user: publicUser(data) });
 }));

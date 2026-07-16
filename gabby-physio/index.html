@@ -335,7 +335,6 @@
     box-shadow: 0 8px 24px rgba(0,0,0,0.4);
     background: #fff;
   }
-  #face-start { animation: bob 2s ease-in-out infinite; }
   #face-celebrate {
     z-index: 2;
     animation: wiggle 0.5s ease-in-out infinite alternate;
@@ -442,6 +441,14 @@
     color: rgba(255,255,255,0.8);
   }
   #user-chip.active { display: flex; }
+  #user-chip-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--accent);
+    background: #fff;
+  }
   #user-chip button {
     background: rgba(255,255,255,0.12);
     border: 1px solid rgba(255,255,255,0.3);
@@ -450,6 +457,137 @@
     padding: 4px 12px;
     font-size: 0.8rem;
     cursor: pointer;
+  }
+
+  /* ============ start / dashboard ============ */
+  #screen-start {
+    max-width: 520px;
+    gap: 14px;
+    justify-content: flex-start;
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 4px 2px 16px;
+    -webkit-overflow-scrolling: touch;
+  }
+  #screen-start #app-title {
+    font-size: clamp(1.25rem, 4.5vw, 1.7rem);
+    letter-spacing: 0.5px;
+  }
+
+  .profile-head {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    text-align: left;
+  }
+  .profile-avatar-btn {
+    position: relative;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    flex: 0 0 auto;
+    border-radius: 50%;
+  }
+  #profile-avatar {
+    width: clamp(88px, 22vw, 112px);
+    height: clamp(88px, 22vw, 112px);
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid var(--accent);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    background: #fff;
+    display: block;
+  }
+  .profile-avatar-edit {
+    position: absolute;
+    right: 2px;
+    bottom: 2px;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: rgba(43, 16, 85, 0.92);
+    border: 2px solid var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .profile-meta { min-width: 0; flex: 1; }
+  #profile-name {
+    font-size: clamp(1.35rem, 5vw, 1.85rem);
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.25);
+    line-height: 1.15;
+    word-break: break-word;
+  }
+  #profile-total {
+    margin-top: 6px;
+    font-size: 0.95rem;
+    color: rgba(255,255,255,0.85);
+  }
+  #profile-total strong {
+    color: var(--accent);
+    font-size: 1.15rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #week-panel {
+    width: 100%;
+  }
+  .week-heading {
+    font-size: 0.8rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
+  #week-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 4px 0;
+    table-layout: fixed;
+  }
+  #week-table th {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.65);
+    padding: 0 0 6px;
+  }
+  #week-table th.today { color: var(--accent); }
+  #week-table td.week-cell {
+    font-size: clamp(0.72rem, 2.8vw, 0.9rem);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    padding: 10px 2px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.18);
+    color: rgba(255,255,255,0.9);
+  }
+  #week-table td.week-cell.today {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px rgba(255,215,0,0.35);
+  }
+  #week-table td.week-cell.partial {
+    background: rgba(96, 165, 250, 0.28);
+  }
+  #week-table td.week-cell.goal-met {
+    background: rgba(74, 222, 128, 0.35);
+    border-color: var(--go);
+    color: #ecfdf5;
+  }
+  #week-table td.week-cell.future {
+    opacity: 0.45;
+    font-weight: 600;
   }
 
   /* ============ today progress stars ============ */
@@ -530,6 +668,7 @@
 <img id="gabby-pong" src="gabby.png" alt="">
 
 <div id="user-chip">
+  <img id="user-chip-avatar" src="gabby.png" alt="">
   <span id="user-chip-name"></span>
   <button id="btn-logout" type="button">Log out</button>
 </div>
@@ -553,7 +692,17 @@
   </section>
 
   <section id="screen-start" class="screen">
-    <img id="face-start" class="gabby-face" src="gabby.png" alt="Gabby">
+    <div class="profile-head">
+      <button type="button" class="profile-avatar-btn" id="btn-avatar" aria-label="Change profile photo" title="Change profile photo">
+        <img id="profile-avatar" src="gabby.png" alt="Profile photo">
+        <span class="profile-avatar-edit" aria-hidden="true">Edit</span>
+      </button>
+      <input type="file" id="avatar-input" accept="image/*" hidden>
+      <div class="profile-meta">
+        <div id="profile-name">Player</div>
+        <div id="profile-total"><strong>0</strong> total sessions</div>
+      </div>
+    </div>
     <h1 id="app-title">Gabby's Physio Adventure</h1>
     <div class="stars-row" id="today-stars"></div>
     <p class="subtitle" id="start-blurb">Loading exercises…</p>
@@ -564,6 +713,13 @@
       <button id="btn-goal-minus" type="button" aria-label="Decrease daily goal">−</button>
       <span id="goal-num">3</span>
       <button id="btn-goal-plus" type="button" aria-label="Increase daily goal">+</button>
+    </div>
+    <div id="week-panel">
+      <div class="week-heading">This week</div>
+      <table id="week-table" aria-label="Sessions this week">
+        <thead><tr id="week-days"></tr></thead>
+        <tbody><tr id="week-counts"></tr></tbody>
+      </table>
     </div>
     <button class="ghost" id="btn-history">📋 All my sessions</button>
   </section>
@@ -1870,9 +2026,11 @@ function jumpToRep(repIndex) {
 }
 
 function updateProgressHighlight() {
-  document.querySelectorAll('.exercise-progress .ex-dot').forEach((d, i) => {
-    d.classList.toggle('done', i < state.exercise);
-    d.classList.toggle('current', i === state.exercise);
+  document.querySelectorAll('.exercise-progress').forEach((wrap) => {
+    wrap.querySelectorAll('.ex-dot').forEach((d, i) => {
+      d.classList.toggle('done', i < state.exercise);
+      d.classList.toggle('current', i === state.exercise);
+    });
   });
 }
 
@@ -2219,7 +2377,7 @@ function startBetween() {
   music.muted = false;
   gabbyPong.stop();
   stopDemoVideo();
-  setWorkoutMusic('rest');
+  setWorkoutMusic(null);
   playBetweenPreviewVideo(ex);
   $('between-name').textContent = `${state.exercise + 1}. ${ex.name}`;
   $('between-hint').textContent = ex.hint || '';
@@ -2624,15 +2782,52 @@ function renderStars(container, completed, goal, animateLast = false) {
   }
 }
 
+function avatarSrc(user) {
+  return (user && user.avatarUrl) || 'gabby.png';
+}
+
+function renderWeekTable(week, goal, today) {
+  const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const head = $('week-days');
+  const row = $('week-counts');
+  head.innerHTML = '';
+  row.innerHTML = '';
+  (week || []).forEach((day, i) => {
+    const th = document.createElement('th');
+    th.textContent = labels[i] || '';
+    if (day.date === today) th.classList.add('today');
+    head.appendChild(th);
+
+    const td = document.createElement('td');
+    const future = day.date > today;
+    td.className = 'week-cell'
+      + (day.date === today ? ' today' : '')
+      + (day.completed >= goal ? ' goal-met' : day.completed > 0 ? ' partial' : '')
+      + (future ? ' future' : '');
+    td.textContent = future && day.completed === 0 ? '—' : `${day.completed}/${goal}`;
+    td.title = `${friendlyDate(day.date)}: ${day.completed} of ${goal}`;
+    row.appendChild(td);
+  });
+}
+
 function renderStartScreen() {
   if (!ME) return;
-  const { completed, goal } = ME.today;
+  const { completed, goal, date } = ME.today;
   const left = Math.max(0, goal - completed);
   const name = ME.user.displayName || ME.user.username;
+  const total = ME.totalSessions || 0;
+  const src = avatarSrc(ME.user);
+
+  $('profile-avatar').src = src;
+  $('user-chip-avatar').src = src;
+  $('profile-name').textContent = name;
+  $('profile-total').innerHTML =
+    `<strong>${total}</strong> total session${total === 1 ? '' : 's'}`;
   renderStars($('today-stars'), completed, goal);
+  renderWeekTable(ME.week, goal, date || localDateStr());
   $('goal-num').textContent = goal;
   $('start-blurb').innerHTML =
-    `Hi ${name}! ${EXERCISES.length} exercises per session.<br>` +
+    `${EXERCISES.length} exercises per session.<br>` +
     (left === 0
       ? `Daily goal done — ${completed} session${completed === 1 ? '' : 's'} today! Extra ones earn bonus stars ✨`
       : `${completed} of ${goal} sessions done today · ${left} to go!`);
@@ -2653,6 +2848,46 @@ async function changeGoal(delta) {
 }
 $('btn-goal-minus').addEventListener('click', () => changeGoal(-1));
 $('btn-goal-plus').addEventListener('click', () => changeGoal(1));
+
+function compressImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const max = 512;
+      let { width, height } = img;
+      const scale = Math.min(1, max / Math.max(width, height));
+      width = Math.max(1, Math.round(width * scale));
+      height = Math.max(1, Math.round(height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not read that image'));
+    };
+    img.src = url;
+  });
+}
+
+$('btn-avatar').addEventListener('click', () => $('avatar-input').click());
+$('avatar-input').addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file || !ME) return;
+  try {
+    const image = await compressImageFile(file);
+    const data = await api('POST', '/api/me/avatar', { image });
+    ME.user = data.user;
+    renderStartScreen();
+  } catch (err) {
+    alert(err.message || 'Could not upload photo');
+  }
+});
 
 /* ============================== history ============================== */
 

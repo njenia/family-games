@@ -5,8 +5,9 @@ tracking (Supabase Postgres).
 
 ## Setup
 
-1. **Create the tables**: open your Supabase project → SQL Editor → paste the
-   contents of `supabase/migrations/0001_init.sql` → Run.
+1. **Create the tables**: open your Supabase project → SQL Editor → paste and run
+   `supabase/migrations/0001_init.sql`, then `supabase/migrations/0002_avatars.sql`
+   (adds profile photos + the `avatars` storage bucket).
 2. **Environment**: copy `.env.example` to `.env` and fill in `SUPABASE_URL`,
    `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (Project Settings → API Keys).
 
@@ -47,11 +48,13 @@ lose nothing.
 
 Defined in `supabase/migrations/0001_init.sql`:
 
-- `profiles` — one per auth user: username, display name, daily goal
+- `profiles` — one per auth user: username, display name, daily goal, optional
+  `avatar_url`
 - `schemes` — exercise configuration per user (JSONB), `is_active` flag allows
   multiple schemes per user later
 - `sessions` — one row per workout: status (`in_progress` / `completed` /
   `abandoned`), local date, exercises completed/total, timestamps
+- Storage bucket `avatars` — public profile photos uploaded via `POST /api/me/avatar`
 
 ## Maintenance
 
