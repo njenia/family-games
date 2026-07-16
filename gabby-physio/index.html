@@ -535,14 +535,43 @@
     line-height: 1.2;
   }
 
+  #topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  #topbar-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .topbar-link {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.28);
+    color: #fff;
+    border-radius: 999px;
+    padding: 8px 12px;
+    min-height: 36px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .topbar-link:hover { background: rgba(255,255,255,0.2); }
+  .topbar-link:active { background: rgba(255,255,255,0.28); }
+
   #user-chip {
     display: flex;
     align-items: center;
     gap: 8px;
     font-size: 0.85rem;
     color: rgba(255,255,255,0.8);
-    flex: 0 0 auto;
-    max-width: 55%;
+    flex: 0 1 auto;
+    min-width: 0;
   }
   #user-chip-name {
     overflow: hidden;
@@ -653,18 +682,12 @@
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
+    width: 100%;
   }
   .home-actions .big {
     width: 100%;
-  }
-  .home-links {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .home-links .ghost {
-    flex: 1 1 auto;
-    min-width: 0;
+    max-width: none;
+    text-align: center;
   }
 
   .profile-head {
@@ -881,32 +904,42 @@
       display: grid;
       grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.95fr);
       gap: 40px 48px;
-      align-items: center;
+      align-items: stretch;
     }
     .home-hero {
-      gap: 26px;
+      gap: 28px;
       padding-right: 12px;
+      height: 100%;
+      justify-content: space-between;
+    }
+    .home-aside {
+      display: flex;
+      min-height: 100%;
     }
     .home-actions {
-      align-items: flex-start;
-      max-width: 320px;
+      width: 100%;
+      max-width: none;
+      margin-top: auto;
     }
     .home-actions .big {
-      width: auto;
-      min-width: 240px;
-    }
-    .home-links {
       width: 100%;
+      min-width: 0;
     }
     #week-panel {
-      padding: 22px 20px 18px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      width: 100%;
+      min-height: 100%;
+      padding: 28px 24px;
       border-radius: 22px;
       background: rgba(0, 0, 0, 0.22);
       box-shadow: 0 16px 40px rgba(0,0,0,0.22);
     }
     #week-table td.week-cell {
-      padding: 14px 2px;
-      font-size: 0.95rem;
+      padding: 18px 2px;
+      font-size: 1rem;
     }
     #profile-avatar {
       width: 120px;
@@ -992,8 +1025,14 @@
       min-width: min(140px, 42%);
     }
 
-    #app-title { font-size: 0.92rem; }
-    #user-chip-name { max-width: 18vw; }
+    #app-title { font-size: 0.85rem; }
+    #user-chip-name { display: none; }
+    .topbar-link {
+      padding: 8px 10px;
+      font-size: 0.72rem;
+    }
+    #topbar-right { gap: 6px; }
+    #topbar-nav { gap: 4px; }
 
     .profile-head { gap: 12px; }
     #profile-avatar {
@@ -1136,10 +1175,16 @@
 
 <header id="topbar">
   <div id="app-title">Gabby's Physio Adventure</div>
-  <div id="user-chip">
-    <img id="user-chip-avatar" src="gabby.png" alt="">
-    <span id="user-chip-name"></span>
-    <button id="btn-logout" type="button">Log out</button>
+  <div id="topbar-right">
+    <nav id="topbar-nav" aria-label="Account">
+      <button class="topbar-link" id="btn-history" type="button">Sessions</button>
+      <button class="topbar-link" id="btn-settings" type="button">Settings</button>
+    </nav>
+    <div id="user-chip">
+      <img id="user-chip-avatar" src="gabby.png" alt="">
+      <span id="user-chip-name"></span>
+      <button id="btn-logout" type="button">Log out</button>
+    </div>
   </div>
 </header>
 
@@ -1188,10 +1233,6 @@
         <p class="error" id="load-error" hidden></p>
         <div class="home-actions">
           <button class="big" id="btn-start" disabled>Let's Go!</button>
-          <div class="home-links">
-            <button class="ghost" id="btn-history" type="button">All sessions</button>
-            <button class="ghost" id="btn-settings" type="button">Settings</button>
-          </div>
         </div>
       </div>
       <aside class="home-aside">
