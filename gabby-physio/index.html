@@ -571,15 +571,100 @@
     flex-shrink: 0;
   }
 
+  #session-eta {
+    position: fixed;
+    top: calc(max(10px, var(--safe-top)) + 44px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 19;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(15, 8, 40, 0.55);
+    border: 1px solid rgba(255,255,255,0.18);
+    backdrop-filter: blur(6px);
+    font-size: 0.82rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255,255,255,0.9);
+    white-space: nowrap;
+    max-width: calc(100vw - 24px);
+    pointer-events: none;
+  }
+  #session-eta.active { display: flex; }
+  #session-eta .eta-sep { color: rgba(255,255,255,0.35); font-weight: 500; }
+  #session-left { color: var(--accent); }
+  #session-finish { color: rgba(255,255,255,0.85); }
+
+  body:has(#session-eta.active) #screen-workout,
+  body:has(#session-eta.active) #screen-between {
+    padding-top: 28px;
+  }
+
   /* ============ start / dashboard ============ */
   #screen-start {
     max-width: 520px;
-    gap: 14px;
+    gap: 0;
     justify-content: flex-start;
     max-height: 100%;
     overflow-y: auto;
-    padding: 52px 2px 16px; /* room for fixed topbar */
+    padding: 56px 2px 20px; /* room for fixed topbar */
     -webkit-overflow-scrolling: touch;
+    text-align: left;
+  }
+
+  .home-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    width: 100%;
+  }
+
+  .home-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 22px;
+    width: 100%;
+  }
+
+  .home-aside {
+    width: 100%;
+  }
+
+  .today-block {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .section-label {
+    font-size: 0.72rem;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .home-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .home-actions .big {
+    width: 100%;
+  }
+  .home-links {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .home-links .ghost {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .profile-head {
@@ -599,8 +684,8 @@
     border-radius: 50%;
   }
   #profile-avatar {
-    width: clamp(88px, 22vw, 112px);
-    height: clamp(88px, 22vw, 112px);
+    width: clamp(84px, 22vw, 108px);
+    height: clamp(84px, 22vw, 108px);
     border-radius: 50%;
     object-fit: cover;
     border: 4px solid var(--accent);
@@ -629,7 +714,7 @@
   }
   .profile-meta { min-width: 0; flex: 1; }
   #profile-name {
-    font-size: clamp(1.35rem, 5vw, 1.85rem);
+    font-size: clamp(1.4rem, 5vw, 1.9rem);
     font-weight: 800;
     color: #fff;
     text-shadow: 2px 2px 0 rgba(0,0,0,0.25);
@@ -649,13 +734,17 @@
 
   #week-panel {
     width: 100%;
+    padding: 16px 14px 14px;
+    border-radius: 18px;
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid rgba(255,255,255,0.14);
   }
   .week-heading {
-    font-size: 0.8rem;
-    letter-spacing: 1.5px;
+    font-size: 0.72rem;
+    letter-spacing: 1.6px;
     text-transform: uppercase;
     color: var(--accent);
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     font-weight: 700;
   }
   #week-table {
@@ -680,6 +769,7 @@
     background: rgba(255,255,255,0.1);
     border: 1px solid rgba(255,255,255,0.18);
     color: rgba(255,255,255,0.9);
+    text-align: center;
   }
   #week-table td.week-cell.today {
     border-color: var(--accent);
@@ -702,7 +792,7 @@
   .stars-row {
     display: flex;
     gap: 10px;
-    justify-content: center;
+    justify-content: flex-start;
     flex-wrap: wrap;
     font-size: clamp(1.9rem, 8vw, 2.6rem);
     min-height: 1.2em;
@@ -719,12 +809,41 @@
     100% { transform: scale(1) rotate(0); opacity: 1; }
   }
 
+  /* ============ settings ============ */
+  #screen-settings {
+    max-width: 420px;
+    gap: 20px;
+    padding-top: 56px;
+    text-align: left;
+  }
+  #screen-settings h1 {
+    font-size: clamp(1.4rem, 5vw, 1.85rem);
+    width: 100%;
+    text-align: left;
+  }
+  .settings-card {
+    width: 100%;
+    padding: 20px 18px;
+    border-radius: 18px;
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid rgba(255,255,255,0.14);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .settings-card .section-label { margin-bottom: 0; }
+  .settings-hint {
+    font-size: 0.92rem;
+    color: rgba(255,255,255,0.75);
+    line-height: 1.4;
+  }
   #goal-row {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     flex-wrap: wrap;
     gap: 12px;
+    margin-top: 6px;
     font-size: 0.95rem;
     color: rgba(255,255,255,0.85);
   }
@@ -742,11 +861,72 @@
   }
   #goal-row button:hover { background: rgba(255,255,255,0.25); }
   #goal-row button:active { background: rgba(255,255,255,0.32); }
-  #goal-num { font-size: 1.15rem; font-weight: 800; color: var(--accent); min-width: 1.4em; text-align: center; }
+  #goal-num {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--accent);
+    min-width: 1.6em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Desktop home: side-by-side composition */
+  @media (min-width: 860px) {
+    #screen-start {
+      max-width: 960px;
+      padding: 72px 8px 28px;
+      justify-content: center;
+    }
+    .home-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.95fr);
+      gap: 40px 48px;
+      align-items: center;
+    }
+    .home-hero {
+      gap: 26px;
+      padding-right: 12px;
+    }
+    .home-actions {
+      align-items: flex-start;
+      max-width: 320px;
+    }
+    .home-actions .big {
+      width: auto;
+      min-width: 240px;
+    }
+    .home-links {
+      width: 100%;
+    }
+    #week-panel {
+      padding: 22px 20px 18px;
+      border-radius: 22px;
+      background: rgba(0, 0, 0, 0.22);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.22);
+    }
+    #week-table td.week-cell {
+      padding: 14px 2px;
+      font-size: 0.95rem;
+    }
+    #profile-avatar {
+      width: 120px;
+      height: 120px;
+    }
+    #profile-name { font-size: 2rem; }
+    .stars-row { font-size: 2.5rem; gap: 12px; }
+  }
+
+  @media (min-width: 1100px) {
+    #screen-start { max-width: 1040px; }
+    .home-layout {
+      grid-template-columns: minmax(0, 1.2fr) minmax(320px, 1fr);
+      gap: 48px 64px;
+    }
+  }
 
   /* ============ history ============ */
   #screen-history {
-    padding-top: 8px;
+    padding-top: 56px;
   }
   #history-wrap {
     width: 100%;
@@ -776,6 +956,9 @@
   #history-table td.count { font-variant-numeric: tabular-nums; white-space: nowrap; }
   #history-table .goal-met { color: var(--go); font-weight: 700; }
   #history-empty { padding: 24px; color: rgba(255,255,255,0.7); text-align: center; }
+
+  #screen-finish .stars-row { justify-content: center; }
+  #screen-settings > .ghost { align-self: flex-start; }
 
   input, textarea {
     -webkit-user-select: text;
@@ -829,7 +1012,9 @@
   /* Compact workout when vertical space is tight (phones, landscape) */
   @media (max-height: 740px) {
     .screen { gap: 12px; }
-    #screen-start { gap: 12px; padding-top: 44px; }
+    #screen-start { padding-top: 48px; }
+    .home-layout { gap: 20px; }
+    .home-hero { gap: 16px; }
 
     #exercise-visual,
     #between-visual {
@@ -869,7 +1054,9 @@
 
   @media (max-height: 560px) {
     .screen { gap: 8px; }
-    #screen-start { padding-top: 40px; gap: 10px; }
+    #screen-start { padding-top: 44px; }
+    .home-layout { gap: 14px; }
+    .home-hero { gap: 12px; }
 
     #screen-workout:has(#exercise-video.active) #exercise-visual,
     #screen-between:has(#between-video.active) #between-visual {
@@ -956,6 +1143,12 @@
   </div>
 </header>
 
+<div id="session-eta" aria-live="polite">
+  <span id="session-left">0:00 left</span>
+  <span class="eta-sep" aria-hidden="true">·</span>
+  <span id="session-finish">Finish at —</span>
+</div>
+
 <div id="app">
 
   <section id="screen-auth" class="screen">
@@ -975,35 +1168,56 @@
   </section>
 
   <section id="screen-start" class="screen">
-    <div class="profile-head">
-      <button type="button" class="profile-avatar-btn" id="btn-avatar" aria-label="Change profile photo" title="Change profile photo">
-        <img id="profile-avatar" src="gabby.png" alt="Profile photo">
-        <span class="profile-avatar-edit" aria-hidden="true">Edit</span>
-      </button>
-      <input type="file" id="avatar-input" accept="image/*" hidden>
-      <div class="profile-meta">
-        <div id="profile-name">Player</div>
-        <div id="profile-total"><strong>0</strong> total sessions</div>
+    <div class="home-layout">
+      <div class="home-hero">
+        <div class="profile-head">
+          <button type="button" class="profile-avatar-btn" id="btn-avatar" aria-label="Change profile photo" title="Change profile photo">
+            <img id="profile-avatar" src="gabby.png" alt="Profile photo">
+            <span class="profile-avatar-edit" aria-hidden="true">Edit</span>
+          </button>
+          <input type="file" id="avatar-input" accept="image/*" hidden>
+          <div class="profile-meta">
+            <div id="profile-name">Player</div>
+            <div id="profile-total"><strong>0</strong> total sessions</div>
+          </div>
+        </div>
+        <div class="today-block">
+          <div class="section-label">Today</div>
+          <div class="stars-row" id="today-stars"></div>
+        </div>
+        <p class="error" id="load-error" hidden></p>
+        <div class="home-actions">
+          <button class="big" id="btn-start" disabled>Let's Go!</button>
+          <div class="home-links">
+            <button class="ghost" id="btn-history" type="button">All sessions</button>
+            <button class="ghost" id="btn-settings" type="button">Settings</button>
+          </div>
+        </div>
+      </div>
+      <aside class="home-aside">
+        <div id="week-panel">
+          <div class="week-heading">This week</div>
+          <table id="week-table" aria-label="Sessions this week">
+            <thead><tr id="week-days"></tr></thead>
+            <tbody><tr id="week-counts"></tr></tbody>
+          </table>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section id="screen-settings" class="screen">
+    <h1>Settings</h1>
+    <div class="settings-card">
+      <div class="section-label">Daily goal</div>
+      <p class="settings-hint">How many sessions you want to complete each day. Stars on the home screen match this goal.</p>
+      <div id="goal-row">
+        <button id="btn-goal-minus" type="button" aria-label="Decrease daily goal">−</button>
+        <span id="goal-num">3</span>
+        <button id="btn-goal-plus" type="button" aria-label="Increase daily goal">+</button>
       </div>
     </div>
-    <div class="stars-row" id="today-stars"></div>
-    <p class="subtitle" id="start-blurb">Loading exercises…</p>
-    <p class="error" id="load-error" hidden></p>
-    <button class="big" id="btn-start" disabled>Let's Go!</button>
-    <div id="goal-row">
-      <span>Daily goal:</span>
-      <button id="btn-goal-minus" type="button" aria-label="Decrease daily goal">−</button>
-      <span id="goal-num">3</span>
-      <button id="btn-goal-plus" type="button" aria-label="Increase daily goal">+</button>
-    </div>
-    <div id="week-panel">
-      <div class="week-heading">This week</div>
-      <table id="week-table" aria-label="Sessions this week">
-        <thead><tr id="week-days"></tr></thead>
-        <tbody><tr id="week-counts"></tr></tbody>
-      </table>
-    </div>
-    <button class="ghost" id="btn-history">📋 All my sessions</button>
+    <button class="ghost" id="btn-settings-back" type="button">Back</button>
   </section>
 
   <section id="screen-history" class="screen">
@@ -1015,7 +1229,7 @@
       </table>
       <div id="history-empty" hidden>No sessions yet — do your first one!</div>
     </div>
-    <button class="ghost" id="btn-history-back">← Back</button>
+    <button class="ghost" id="btn-history-back" type="button">Back</button>
   </section>
 
   <section id="screen-workout" class="screen">
@@ -1922,6 +2136,7 @@ const $ = id => document.getElementById(id);
 const screens = {
   auth: $('screen-auth'),
   start: $('screen-start'),
+  settings: $('screen-settings'),
   history: $('screen-history'),
   workout: $('screen-workout'),
   between: $('screen-between'),
@@ -1941,6 +2156,160 @@ function resolveTiming(ex) {
     workSeconds: ex.workSeconds ?? d.workSeconds ?? 5,
     restSeconds: ex.restSeconds ?? d.restSeconds ?? 4,
   };
+}
+
+const COUNT_TAP_SECONDS = 2; // estimate for tap-based count exercises
+
+function phaseSecondsSum(ex) {
+  return (ex.phases || []).reduce((sum, p) => sum + (Number(p.seconds) || 0), 0);
+}
+
+function fullExerciseSeconds(ex) {
+  const t = resolveTiming(ex);
+  if (ex.mode === 'dual') {
+    const sum = phaseSecondsSum(ex);
+    return t.reps * sum + Math.max(0, t.reps - 1) * (t.restSeconds || 0);
+  }
+  if (ex.mode === 'count') {
+    const sets = ex.sets || 1;
+    const taps = (ex.sequence || []).reduce((sum, step) => sum + (step.count || 0), 0);
+    return sets * taps * COUNT_TAP_SECONDS;
+  }
+  return t.reps * t.workSeconds + Math.max(0, t.reps - 1) * t.restSeconds;
+}
+
+function remainingCurrentExerciseSeconds() {
+  const ex = currentExercise();
+  if (!ex) return 0;
+  const t = resolveTiming(ex);
+
+  if (ex.mode === 'timed') {
+    if (state.phase === 'rest') {
+      const worksLeft = t.reps - state.rep;
+      return Math.max(0, state.secondsLeft)
+        + worksLeft * t.workSeconds
+        + Math.max(0, worksLeft - 1) * t.restSeconds;
+    }
+    // work phase: finish current work, then remaining full reps
+    let rem = Math.max(0, state.secondsLeft);
+    const after = t.reps - state.rep - 1;
+    if (after > 0) {
+      rem += after * t.workSeconds + after * t.restSeconds;
+    }
+    return rem;
+  }
+
+  if (ex.mode === 'dual') {
+    const phases = ex.phases || [];
+    const sum = phaseSecondsSum(ex);
+    if (state.phase === 'rest') {
+      const repsLeft = t.reps - state.rep;
+      return Math.max(0, state.secondsLeft)
+        + repsLeft * sum
+        + Math.max(0, repsLeft - 1) * (t.restSeconds || 0);
+    }
+    let rem = Math.max(0, state.secondsLeft);
+    for (let i = state.phaseIndex + 1; i < phases.length; i++) {
+      rem += Number(phases[i].seconds) || 0;
+    }
+    const after = t.reps - state.rep - 1;
+    if (after > 0) {
+      rem += after * sum + after * (t.restSeconds || 0);
+    }
+    return rem;
+  }
+
+  if (ex.mode === 'count') {
+    const seq = ex.sequence || [];
+    const sets = ex.sets || 1;
+    let tapsLeft = 0;
+    const cur = seq[state.seqIndex];
+    if (cur) tapsLeft += Math.max(0, (cur.count || 0) - state.count);
+    for (let i = state.seqIndex + 1; i < seq.length; i++) tapsLeft += seq[i].count || 0;
+    const setTaps = seq.reduce((s, step) => s + (step.count || 0), 0);
+    tapsLeft += Math.max(0, sets - state.setIndex - 1) * setTaps;
+    return tapsLeft * COUNT_TAP_SECONDS;
+  }
+
+  return 0;
+}
+
+function remainingSessionSeconds() {
+  if (!EXERCISES.length) return 0;
+  const between = CONFIG.betweenSeconds ?? 8;
+  const celeb = Math.round((CONFIG.celebrationMs || 8000) / 1000);
+
+  if ($('celebration').classList.contains('active')) {
+    let rem = state.celebrationEndsAt
+      ? Math.max(0, (state.celebrationEndsAt - Date.now()) / 1000)
+      : celeb;
+    for (let i = state.exercise + 1; i < EXERCISES.length; i++) {
+      rem += between + fullExerciseSeconds(EXERCISES[i]) + celeb;
+    }
+    return rem;
+  }
+
+  if (state.between) {
+    let rem = Math.max(0, state.betweenLeft);
+    for (let i = state.exercise; i < EXERCISES.length; i++) {
+      rem += fullExerciseSeconds(EXERCISES[i]) + celeb;
+      if (i < EXERCISES.length - 1) rem += between;
+    }
+    return rem;
+  }
+
+  // active workout
+  let rem = remainingCurrentExerciseSeconds() + celeb;
+  for (let i = state.exercise + 1; i < EXERCISES.length; i++) {
+    rem += between + fullExerciseSeconds(EXERCISES[i]) + celeb;
+  }
+  return rem;
+}
+
+function formatDuration(sec) {
+  const n = Math.max(0, Math.ceil(sec));
+  const m = Math.floor(n / 60);
+  const s = n % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function formatFinishClock(date) {
+  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function showSessionEta() {
+  $('session-eta').classList.add('active');
+  updateSessionEta(true);
+}
+
+function hideSessionEta() {
+  $('session-eta').classList.remove('active');
+  stopEtaTicker();
+  state.finishAtMs = null;
+  state.celebrationEndsAt = null;
+}
+
+function startEtaTicker() {
+  stopEtaTicker();
+  state.etaTimerId = setInterval(() => updateSessionEta(false), 1000);
+}
+
+function stopEtaTicker() {
+  if (state.etaTimerId) {
+    clearInterval(state.etaTimerId);
+    state.etaTimerId = null;
+  }
+}
+
+function updateSessionEta(forceFinish = false) {
+  const el = $('session-eta');
+  if (!el.classList.contains('active')) return;
+  const rem = remainingSessionSeconds();
+  $('session-left').textContent = `${formatDuration(rem)} left`;
+  if (forceFinish || !state.paused || !state.finishAtMs) {
+    state.finishAtMs = Date.now() + rem * 1000;
+  }
+  $('session-finish').textContent = `Finish at ${formatFinishClock(new Date(state.finishAtMs))}`;
 }
 
 function setVisual(ex) {
@@ -2159,6 +2528,10 @@ const state = {
   // server session tracking
   sessionId: null,
   exercisesDone: 0,
+  // session ETA
+  finishAtMs: null,
+  celebrationEndsAt: null,
+  etaTimerId: null,
 };
 
 /* ============================== account / api ============================== */
@@ -2252,6 +2625,7 @@ function jumpToExercise(index) {
   state.between = false;
   updateProgressHighlight();
   startBetween();
+  updateSessionEta(true);
 }
 
 function buildRepDots(n) {
@@ -2305,6 +2679,7 @@ function jumpToRep(repIndex) {
   sounds.goBeep();
   syncGabbyPong();
   startTimer();
+  updateSessionEta(true);
 }
 
 function updateProgressHighlight() {
@@ -2593,6 +2968,7 @@ function onCountTap() {
   state.count++;
   sounds.tick();
   renderCountPanel();
+  updateSessionEta(true);
 
   if (state.count < step.count) return;
 
@@ -2604,6 +2980,7 @@ function onCountTap() {
     state.seqIndex++;
     renderCountPanel();
     playCountStepVideo(ex);
+    updateSessionEta(true);
     return;
   }
 
@@ -2613,6 +2990,7 @@ function onCountTap() {
     state.seqIndex = 0;
     renderCountPanel();
     playCountStepVideo(ex);
+    updateSessionEta(true);
     return;
   }
 
@@ -2730,10 +3108,15 @@ function celebrate() {
 
   const minMs = CONFIG.celebrationMs || 8000;
   const started = Date.now();
+  state.celebrationEndsAt = started + minMs;
+  updateSessionEta(true);
   playBonusVideoOnce().then(() => {
     const remaining = Math.max(0, minMs - (Date.now() - started));
+    state.celebrationEndsAt = Date.now() + remaining;
+    updateSessionEta(true);
     state.celebrationTimerId = setTimeout(() => {
       state.celebrationTimerId = null;
+      state.celebrationEndsAt = null;
       stopBonusVideo();
       $('celebration').classList.remove('active');
       nextExercise();
@@ -2755,6 +3138,7 @@ function finishSession() {
   stopBetweenVideo();
   state.between = false;
   setWorkoutMusic(null);
+  hideSessionEta();
   $('finish-blurb').textContent = `All ${EXERCISES.length} exercises complete!`;
   $('finish-stars').innerHTML = '';
   showScreen('finish');
@@ -2804,6 +3188,8 @@ function beginSession() {
     .then((data) => { state.sessionId = data.id; })
     .catch(() => {});
   buildProgressDots();
+  showSessionEta();
+  startEtaTicker();
   startBetween();
 }
 
@@ -2828,6 +3214,7 @@ function togglePause() {
       music.resume();
       const v = $('between-video');
       if (v.classList.contains('active')) v.play().catch(() => {});
+      updateSessionEta(true);
     }
     return;
   }
@@ -2842,6 +3229,7 @@ function togglePause() {
   } else {
     music.resume();
     resumeDemoVideo();
+    updateSessionEta(true);
   }
 }
 
@@ -3005,6 +3393,7 @@ function setAuthMode(mode) {
 function showAuth() {
   ME = null;
   $('topbar').classList.remove('active');
+  hideSessionEta();
   setAuthMode('login');
   showScreen('auth');
 }
@@ -3107,7 +3496,6 @@ function renderStartScreen() {
   renderStars($('today-stars'), completed, goal);
   renderWeekTable(ME.week, goal, date || localDateStr());
   $('goal-num').textContent = goal;
-  $('start-blurb').textContent = `${completed}/${goal} sessions today`;
   $('user-chip-name').textContent = name;
   $('topbar').classList.add('active');
 }
@@ -3125,6 +3513,12 @@ async function changeGoal(delta) {
 }
 $('btn-goal-minus').addEventListener('click', () => changeGoal(-1));
 $('btn-goal-plus').addEventListener('click', () => changeGoal(1));
+
+function showSettings() {
+  if (!ME) return;
+  $('goal-num').textContent = ME.user.dailyGoal;
+  showScreen('settings');
+}
 
 function compressImageFile(file) {
   return new Promise((resolve, reject) => {
@@ -3224,6 +3618,8 @@ async function refreshMe() {
 
 $('btn-history').addEventListener('click', showHistory);
 $('btn-history-back').addEventListener('click', () => { renderStartScreen(); showScreen('start'); refreshMe(); });
+$('btn-settings').addEventListener('click', showSettings);
+$('btn-settings-back').addEventListener('click', () => { renderStartScreen(); showScreen('start'); refreshMe(); });
 $('btn-finish-home').addEventListener('click', () => {
   particles = [];
   renderStartScreen();
