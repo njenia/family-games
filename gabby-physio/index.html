@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Gabby's Physio Adventure</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -14,9 +17,21 @@
     --go: #4ade80;
     --rest: #60a5fa;
     --phase2: #f472b6;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --app-pad-x: max(16px, var(--safe-left), var(--safe-right));
+    --app-pad-top: max(16px, var(--safe-top));
+    --app-pad-bottom: max(16px, var(--safe-bottom));
+    --touch-min: 44px;
   }
 
-  html, body { height: 100%; }
+  html, body {
+    height: 100%;
+    height: 100dvh;
+    overscroll-behavior: none;
+  }
 
   body {
     font-family: 'Segoe UI', system-ui, sans-serif;
@@ -25,20 +40,42 @@
     overflow: hidden;
     -webkit-user-select: none;
     user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  button, input, a {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
 
   #app {
     position: relative;
     height: 100%;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: var(--app-pad-top) var(--app-pad-x) var(--app-pad-bottom);
     text-align: center;
+    overflow: hidden;
   }
 
-  .screen { display: none; flex-direction: column; align-items: center; gap: 18px; width: 100%; max-width: 460px; }
+  .screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    width: 100%;
+    max-width: 460px;
+    max-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding: 2px 0;
+  }
   .screen.active { display: flex; }
 
   h1 {
@@ -49,12 +86,14 @@
   }
 
   .subtitle { color: rgba(255,255,255,0.85); font-size: 1.05rem; line-height: 1.5; }
-  .error { color: #fecaca; max-width: 360px; }
+  .error { color: #fecaca; max-width: 360px; padding: 0 8px; }
 
   button.big {
     font-size: 1.4rem;
     font-weight: 700;
     padding: 18px 46px;
+    min-height: var(--touch-min);
+    max-width: 100%;
     border: none;
     border-radius: 999px;
     cursor: pointer;
@@ -70,22 +109,27 @@
     background: rgba(255,255,255,0.12);
     border: 1px solid rgba(255,255,255,0.35);
     color: #fff;
-    padding: 10px 22px;
+    padding: 12px 22px;
+    min-height: var(--touch-min);
     border-radius: 999px;
     font-size: 0.95rem;
     cursor: pointer;
   }
   button.ghost:hover { background: rgba(255,255,255,0.22); }
+  button.ghost:active { background: rgba(255,255,255,0.28); }
 
   .exercise-progress {
     display: flex;
     gap: 5px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     justify-content: center;
     width: 100%;
+    row-gap: 6px;
   }
   .exercise-progress .ex-dot {
-    width: 26px; height: 26px;
+    width: 28px; height: 28px;
+    min-width: 28px;
+    min-height: 28px;
     flex: 0 0 auto;
     border-radius: 50%;
     background: rgba(255,255,255,0.18);
@@ -130,7 +174,8 @@
   #exercise-video {
     display: none;
     width: min(86.4vw, 384px);
-    max-height: min(43.2vh, 312px);
+    max-width: 100%;
+    max-height: min(36dvh, 312px);
     border-radius: 18px;
     border: 3px solid rgba(255,215,0,0.45);
     background: #000;
@@ -144,9 +189,11 @@
     font-weight: 700;
     color: var(--accent);
     text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+    padding: 0 8px;
+    word-break: break-word;
   }
 
-  #ring-wrap { position: relative; width: min(58vw, 240px); aspect-ratio: 1; }
+  #ring-wrap { position: relative; width: min(58vw, 240px); max-width: min(52dvh, 240px); aspect-ratio: 1; flex-shrink: 0; }
   #ring-wrap.hidden { display: none; }
   #ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
   #ring-track { fill: none; stroke: rgba(255,255,255,0.15); stroke-width: 12; }
@@ -203,6 +250,8 @@
     font-size: 1.25rem;
     font-weight: 700;
     padding: 16px 36px;
+    min-height: var(--touch-min);
+    max-width: 100%;
     border: none;
     border-radius: 999px;
     cursor: pointer;
@@ -216,13 +265,16 @@
     display: flex;
     gap: 5px;
     justify-content: center;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     width: 100%;
     max-width: 100%;
+    row-gap: 6px;
   }
   #rep-dots.hidden { display: none; }
   #rep-dots .rep {
-    width: 24px; height: 24px;
+    width: 28px; height: 28px;
+    min-width: 28px;
+    min-height: 28px;
     flex: 0 0 auto;
     border-radius: 50%;
     background: rgba(255,255,255,0.2);
@@ -242,11 +294,19 @@
   #rep-dots .rep.done { background: var(--accent); border-color: var(--accent); color: #2b1055; }
   #rep-dots .rep.active { transform: scale(1.35); border-color: #fff; background: var(--go); color: #14532d; }
 
-  #controls { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
-  #controls-between { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  #controls,
+  #controls-between {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    padding-bottom: 4px;
+  }
 
   #celebration {
-    position: fixed; inset: 0;
+    position: fixed;
+    inset: 0;
     display: none;
     flex-direction: column;
     align-items: center;
@@ -256,7 +316,9 @@
     background: rgba(15, 8, 40, 0.55);
     backdrop-filter: blur(3px);
     text-align: center;
-    padding: 20px;
+    padding: max(20px, var(--safe-top)) max(20px, var(--safe-right)) max(20px, var(--safe-bottom)) max(20px, var(--safe-left));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   #celebration.active { display: flex; }
   #celebration h2 {
@@ -286,7 +348,8 @@
     display: none;
     z-index: 2;
     width: min(72vw, 300px);
-    max-height: min(32vh, 220px);
+    max-width: 100%;
+    max-height: min(28dvh, 220px);
     border-radius: 16px;
     border: 3px solid rgba(255,215,0,0.55);
     background: #000;
@@ -308,8 +371,8 @@
     position: fixed;
     left: 0;
     top: 0;
-    width: 96px;
-    height: 96px;
+    width: min(96px, 22vw);
+    height: min(96px, 22vw);
     border-radius: 50%;
     object-fit: cover;
     border: 3px solid var(--accent);
@@ -368,7 +431,8 @@
   #between-video {
     display: none;
     width: min(72vw, 320px);
-    max-height: min(36vh, 260px);
+    max-width: 100%;
+    max-height: min(30dvh, 260px);
     border-radius: 18px;
     border: 3px solid rgba(255,215,0,0.45);
     background: #000;
@@ -380,8 +444,15 @@
     font-weight: 700;
     color: var(--accent);
     text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+    padding: 0 8px;
   }
-  #between-hint { color: rgba(255,255,255,0.8); font-size: 0.95rem; max-width: 26em; line-height: 1.4; }
+  #between-hint {
+    color: rgba(255,255,255,0.8);
+    font-size: 0.95rem;
+    max-width: 26em;
+    line-height: 1.4;
+    padding: 0 8px;
+  }
   #between-count {
     font-size: clamp(4rem, 20vw, 6rem);
     font-weight: 800;
@@ -399,12 +470,13 @@
   }
 
   /* ============ auth ============ */
-  .auth-tabs { display: flex; gap: 8px; }
+  .auth-tabs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   .auth-tab {
     background: rgba(255,255,255,0.1);
     border: 1px solid rgba(255,255,255,0.3);
     color: rgba(255,255,255,0.75);
-    padding: 8px 20px;
+    padding: 10px 20px;
+    min-height: var(--touch-min);
     border-radius: 999px;
     font-size: 0.95rem;
     font-weight: 700;
@@ -417,30 +489,39 @@
   }
   .auth-form { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 300px; }
   .auth-form input {
-    font-size: 1.05rem;
-    padding: 12px 16px;
+    font-size: 16px; /* prevents iOS zoom-on-focus */
+    padding: 14px 16px;
+    min-height: var(--touch-min);
     border-radius: 14px;
     border: 2px solid rgba(255,255,255,0.35);
     background: rgba(255,255,255,0.12);
     color: #fff;
     outline: none;
     text-align: center;
+    width: 100%;
   }
   .auth-form input::placeholder { color: rgba(255,255,255,0.55); }
   .auth-form input:focus { border-color: var(--accent); }
 
   #user-chip {
     position: fixed;
-    top: 10px;
-    right: 12px;
+    top: max(10px, var(--safe-top));
+    right: max(12px, var(--safe-right));
     z-index: 20;
     display: none;
     align-items: center;
     gap: 8px;
     font-size: 0.85rem;
     color: rgba(255,255,255,0.8);
+    max-width: calc(100vw - 24px - var(--safe-left) - var(--safe-right));
   }
   #user-chip.active { display: flex; }
+  #user-chip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 28vw;
+  }
   #user-chip-avatar {
     width: 28px;
     height: 28px;
@@ -448,15 +529,18 @@
     object-fit: cover;
     border: 2px solid var(--accent);
     background: #fff;
+    flex-shrink: 0;
   }
   #user-chip button {
     background: rgba(255,255,255,0.12);
     border: 1px solid rgba(255,255,255,0.3);
     color: #fff;
     border-radius: 999px;
-    padding: 4px 12px;
+    padding: 8px 14px;
+    min-height: 36px;
     font-size: 0.8rem;
     cursor: pointer;
+    flex-shrink: 0;
   }
 
   /* ============ start / dashboard ============ */
@@ -466,7 +550,7 @@
     justify-content: flex-start;
     max-height: 100%;
     overflow-y: auto;
-    padding: 4px 2px 16px;
+    padding: 48px 2px 16px; /* room for fixed user-chip */
     -webkit-overflow-scrolling: touch;
   }
   #screen-start #app-title {
@@ -614,36 +698,44 @@
   #goal-row {
     display: flex;
     align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
     gap: 12px;
     font-size: 0.95rem;
     color: rgba(255,255,255,0.85);
   }
   #goal-row button {
-    width: 34px; height: 34px;
+    width: var(--touch-min);
+    height: var(--touch-min);
     border-radius: 50%;
     border: 1px solid rgba(255,255,255,0.35);
     background: rgba(255,255,255,0.12);
     color: #fff;
-    font-size: 1.2rem;
+    font-size: 1.35rem;
     font-weight: 700;
     cursor: pointer;
     line-height: 1;
   }
   #goal-row button:hover { background: rgba(255,255,255,0.25); }
+  #goal-row button:active { background: rgba(255,255,255,0.32); }
   #goal-num { font-size: 1.15rem; font-weight: 800; color: var(--accent); min-width: 1.4em; text-align: center; }
 
   /* ============ history ============ */
+  #screen-history {
+    padding-top: 8px;
+  }
   #history-wrap {
     width: 100%;
-    max-height: 55vh;
-    overflow-y: auto;
+    max-height: min(55dvh, 480px);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
     border-radius: 16px;
     background: rgba(0,0,0,0.25);
     border: 1px solid rgba(255,255,255,0.2);
   }
   #history-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
   #history-table th, #history-table td {
-    padding: 10px 12px;
+    padding: 12px 10px;
     text-align: left;
     border-bottom: 1px solid rgba(255,255,255,0.12);
   }
@@ -651,7 +743,7 @@
     position: sticky; top: 0;
     background: #3a2070;
     color: var(--accent);
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     letter-spacing: 1px;
     text-transform: uppercase;
   }
@@ -660,6 +752,169 @@
   #history-table td.count { font-variant-numeric: tabular-nums; white-space: nowrap; }
   #history-table .goal-met { color: var(--go); font-weight: 700; }
   #history-empty { padding: 24px; color: rgba(255,255,255,0.7); text-align: center; }
+
+  input, textarea {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* ============ mobile / short viewports ============ */
+  @media (max-width: 480px) {
+    :root {
+      --app-pad-x: max(12px, var(--safe-left), var(--safe-right));
+    }
+
+    .screen { gap: 14px; }
+    .subtitle { font-size: 0.98rem; }
+
+    button.big {
+      font-size: 1.25rem;
+      padding: 16px 28px;
+      width: min(100%, 320px);
+    }
+
+    #btn-count {
+      font-size: 1.15rem;
+      padding: 16px 24px;
+      width: min(100%, 320px);
+    }
+
+    #controls button.ghost,
+    #controls-between button.ghost {
+      flex: 1 1 auto;
+      min-width: min(140px, 42%);
+    }
+
+    #user-chip-name { max-width: 22vw; }
+
+    .profile-head { gap: 12px; }
+    #profile-avatar {
+      width: clamp(72px, 20vw, 96px);
+      height: clamp(72px, 20vw, 96px);
+    }
+
+    #week-table { border-spacing: 3px 0; }
+    #week-table td.week-cell { padding: 8px 1px; border-radius: 10px; }
+
+    #history-table { font-size: 0.88rem; }
+    #history-table th, #history-table td { padding: 10px 8px; }
+    #history-table td.marks { letter-spacing: 1px; font-size: 1rem; }
+  }
+
+  /* Compact workout when vertical space is tight (phones, landscape) */
+  @media (max-height: 740px) {
+    .screen { gap: 12px; }
+    #screen-start { gap: 12px; padding-top: 44px; }
+
+    #exercise-visual,
+    #between-visual {
+      width: clamp(64px, 18vw, 88px);
+      height: clamp(64px, 18vw, 88px);
+      border-radius: 18px;
+      font-size: clamp(2rem, 10vw, 2.8rem);
+    }
+
+    #exercise-video {
+      max-height: min(30dvh, 220px);
+      width: min(82vw, 320px);
+    }
+    #between-video {
+      max-height: min(24dvh, 180px);
+      width: min(68vw, 280px);
+    }
+    #bonus-video {
+      max-height: min(22dvh, 160px);
+    }
+
+    #ring-wrap { width: min(46vw, 180px); max-width: min(40dvh, 180px); }
+    #countdown { font-size: clamp(2.4rem, 12vw, 3.6rem); }
+    #phase-label { font-size: 0.85rem; letter-spacing: 1.5px; }
+    #between-count { font-size: clamp(3rem, 14vw, 4.5rem); }
+    #count-display { font-size: clamp(2.6rem, 14vw, 4rem); }
+
+    .gabby-face {
+      width: clamp(72px, 20vw, 100px);
+      height: clamp(72px, 20vw, 100px);
+    }
+    #trophy { font-size: clamp(3rem, 16vw, 5rem); }
+    #celebration { gap: 12px; }
+    #celebration p { font-size: 1.05rem; }
+    #dance-row { font-size: clamp(1.6rem, 8vw, 2.4rem); gap: 8px; }
+  }
+
+  @media (max-height: 560px) {
+    .screen { gap: 8px; }
+    #screen-start { padding-top: 40px; gap: 10px; }
+
+    #screen-workout:has(#exercise-video.active) #exercise-visual,
+    #screen-between:has(#between-video.active) #between-visual {
+      display: none;
+    }
+
+    #exercise-video { max-height: min(28dvh, 160px); }
+    #between-video { max-height: min(22dvh, 140px); }
+    #bonus-video { max-height: min(20dvh, 120px); }
+
+    #ring-wrap { width: min(36vw, 140px); max-width: min(34dvh, 140px); }
+    #ring-track, #ring-fill { stroke-width: 10; }
+    #countdown { font-size: clamp(2rem, 10vw, 2.8rem); }
+    #between-count { font-size: clamp(2.4rem, 12vw, 3.4rem); }
+    #between-hint {
+      font-size: 0.85rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    #history-wrap { max-height: min(42dvh, 280px); }
+    #celebration h2 { font-size: clamp(1.4rem, 6vw, 2rem); }
+    .stars-row { font-size: clamp(1.4rem, 6vw, 2rem); gap: 6px; }
+  }
+
+  /* Landscape phones: keep workout usable without horizontal overflow */
+  @media (orientation: landscape) and (max-height: 500px) {
+    #app { justify-content: flex-start; }
+    .screen { gap: 6px; justify-content: flex-start; max-width: 720px; }
+
+    #exercise-video,
+    #between-video {
+      max-height: min(42dvh, 160px);
+      width: min(50vw, 280px);
+    }
+    #bonus-video { max-height: min(36dvh, 140px); width: min(40vw, 220px); }
+
+    #ring-wrap { width: min(28vw, 120px); max-width: min(40dvh, 120px); }
+    #exercise-name,
+    #between-name { font-size: clamp(1.1rem, 4.5vw, 1.4rem); }
+    #between-hint {
+      font-size: 0.82rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    #controls,
+    #controls-between { gap: 8px; }
+    #user-chip-name { display: none; }
+    #celebration { gap: 8px; flex-direction: row; flex-wrap: wrap; align-content: center; }
+    #celebration h2,
+    #celebration p,
+    #face-celebrate,
+    #dance-row,
+    #bonus-video { z-index: 2; }
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    button.ghost:hover { background: rgba(255,255,255,0.12); }
+    #goal-row button:hover { background: rgba(255,255,255,0.12); }
+    .exercise-progress .ex-dot:hover { transform: none; border-color: rgba(255,255,255,0.35); }
+    #rep-dots .rep:hover { transform: none; border-color: rgba(255,255,255,0.4); }
+    .exercise-progress .ex-dot:active { transform: scale(1.12); border-color: #fff; }
+    #rep-dots .rep:active { transform: scale(1.15); border-color: #fff; }
+  }
 </style>
 </head>
 <body>
