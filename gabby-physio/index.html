@@ -503,24 +503,52 @@
   .auth-form input::placeholder { color: rgba(255,255,255,0.55); }
   .auth-form input:focus { border-color: var(--accent); }
 
-  #user-chip {
+  #topbar {
     position: fixed;
-    top: max(10px, var(--safe-top));
-    right: max(12px, var(--safe-right));
+    top: 0;
+    left: 0;
+    right: 0;
     z-index: 20;
     display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: max(10px, var(--safe-top)) max(12px, var(--safe-right)) 10px max(12px, var(--safe-left));
+    background: linear-gradient(180deg, rgba(15, 8, 40, 0.72), rgba(15, 8, 40, 0));
+    pointer-events: none;
+  }
+  #topbar.active { display: flex; }
+  #topbar > * { pointer-events: auto; }
+
+  #app-title {
+    min-width: 0;
+    flex: 1 1 auto;
+    font-size: clamp(0.95rem, 3.6vw, 1.15rem);
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    color: var(--accent);
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.35);
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+  }
+
+  #user-chip {
+    display: flex;
     align-items: center;
     gap: 8px;
     font-size: 0.85rem;
     color: rgba(255,255,255,0.8);
-    max-width: calc(100vw - 24px - var(--safe-left) - var(--safe-right));
+    flex: 0 0 auto;
+    max-width: 55%;
   }
-  #user-chip.active { display: flex; }
   #user-chip-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 28vw;
+    max-width: 22vw;
   }
   #user-chip-avatar {
     width: 28px;
@@ -550,12 +578,8 @@
     justify-content: flex-start;
     max-height: 100%;
     overflow-y: auto;
-    padding: 48px 2px 16px; /* room for fixed user-chip */
+    padding: 52px 2px 16px; /* room for fixed topbar */
     -webkit-overflow-scrolling: touch;
-  }
-  #screen-start #app-title {
-    font-size: clamp(1.25rem, 4.5vw, 1.7rem);
-    letter-spacing: 0.5px;
   }
 
   .profile-head {
@@ -785,7 +809,8 @@
       min-width: min(140px, 42%);
     }
 
-    #user-chip-name { max-width: 22vw; }
+    #app-title { font-size: 0.92rem; }
+    #user-chip-name { max-width: 18vw; }
 
     .profile-head { gap: 12px; }
     #profile-avatar {
@@ -922,11 +947,14 @@
 <div id="flash"></div>
 <img id="gabby-pong" src="gabby.png" alt="">
 
-<div id="user-chip">
-  <img id="user-chip-avatar" src="gabby.png" alt="">
-  <span id="user-chip-name"></span>
-  <button id="btn-logout" type="button">Log out</button>
-</div>
+<header id="topbar">
+  <div id="app-title">Gabby's Physio Adventure</div>
+  <div id="user-chip">
+    <img id="user-chip-avatar" src="gabby.png" alt="">
+    <span id="user-chip-name"></span>
+    <button id="btn-logout" type="button">Log out</button>
+  </div>
+</header>
 
 <div id="app">
 
@@ -958,7 +986,6 @@
         <div id="profile-total"><strong>0</strong> total sessions</div>
       </div>
     </div>
-    <h1 id="app-title">Gabby's Physio Adventure</h1>
     <div class="stars-row" id="today-stars"></div>
     <p class="subtitle" id="start-blurb">Loading exercises…</p>
     <p class="error" id="load-error" hidden></p>
@@ -2958,7 +2985,7 @@ function applyConfig(config) {
   if (!Array.isArray(CONFIG.bonusVideos)) CONFIG.bonusVideos = [];
   if (config.title) {
     document.title = config.title;
-    $('app-title').textContent = `🤸 ${config.title} 🤸`;
+    $('app-title').textContent = config.title;
   }
   $('btn-start').disabled = EXERCISES.length === 0;
 }
@@ -2977,7 +3004,7 @@ function setAuthMode(mode) {
 
 function showAuth() {
   ME = null;
-  $('user-chip').classList.remove('active');
+  $('topbar').classList.remove('active');
   setAuthMode('login');
   showScreen('auth');
 }
@@ -3068,7 +3095,6 @@ function renderWeekTable(week, goal, today) {
 function renderStartScreen() {
   if (!ME) return;
   const { completed, goal, date } = ME.today;
-  const left = Math.max(0, goal - completed);
   const name = ME.user.displayName || ME.user.username;
   const total = ME.totalSessions || 0;
   const src = avatarSrc(ME.user);
@@ -3081,13 +3107,9 @@ function renderStartScreen() {
   renderStars($('today-stars'), completed, goal);
   renderWeekTable(ME.week, goal, date || localDateStr());
   $('goal-num').textContent = goal;
-  $('start-blurb').innerHTML =
-    `${EXERCISES.length} exercises per session.<br>` +
-    (left === 0
-      ? `Daily goal done — ${completed} session${completed === 1 ? '' : 's'} today! Extra ones earn bonus stars ✨`
-      : `${completed} of ${goal} sessions done today · ${left} to go!`);
+  $('start-blurb').textContent = `${completed}/${goal} sessions today`;
   $('user-chip-name').textContent = name;
-  $('user-chip').classList.add('active');
+  $('topbar').classList.add('active');
 }
 
 async function changeGoal(delta) {
