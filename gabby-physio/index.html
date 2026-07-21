@@ -329,6 +329,10 @@
     z-index: 2;
   }
   #celebration p { font-size: 1.2rem; color: #fff; z-index: 2; }
+  #btn-celebration-next {
+    z-index: 3;
+    margin-top: 4px;
+  }
   @keyframes pop-in { 0% { transform: scale(0); } 100% { transform: scale(1); } }
 
   #fx-canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 40; }
@@ -356,6 +360,91 @@
     object-fit: contain;
   }
   #bonus-video.active { display: block; }
+
+  /* ============ catch-gabby mini game ============ */
+  #mini-game {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: max(20px, var(--safe-top)) max(16px, var(--safe-right)) max(20px, var(--safe-bottom)) max(16px, var(--safe-left));
+    background: rgba(15, 8, 40, 0.82);
+    backdrop-filter: blur(4px);
+    text-align: center;
+    overflow: hidden;
+  }
+  #mini-game.active { display: flex; }
+  #mini-game-title {
+    font-size: clamp(1.6rem, 6vw, 2.4rem);
+    color: var(--accent);
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.35);
+    z-index: 2;
+    margin-top: 8px;
+  }
+  #mini-game-meta {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    z-index: 2;
+    font-variant-numeric: tabular-nums;
+  }
+  #mini-game-meta strong { color: var(--accent); }
+  #mini-game-stage {
+    position: relative;
+    flex: 1 1 auto;
+    width: min(100%, 520px);
+    min-height: 220px;
+    margin: 8px 0;
+  }
+  #mini-gabby {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 88px;
+    height: 88px;
+    padding: 0;
+    border: 4px solid var(--accent);
+    border-radius: 50%;
+    overflow: hidden;
+    background: #fff;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    will-change: transform;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #mini-gabby img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    pointer-events: none;
+  }
+  #mini-gabby.pop {
+    animation: mini-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes mini-pop {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.35); }
+    100% { transform: scale(1); }
+  }
+  #mini-game-result {
+    z-index: 2;
+    font-size: clamp(1.2rem, 4.5vw, 1.6rem);
+    font-weight: 800;
+    color: var(--accent);
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+    max-width: 20em;
+  }
+  #mini-game-continue {
+    z-index: 2;
+    display: none;
+  }
+  #mini-game-continue.active { display: inline-flex; }
 
   @keyframes flash { 0% { opacity: 0.55; } 100% { opacity: 0; } }
   #flash {
@@ -1369,6 +1458,19 @@
   <div id="dance-row"></div>
   <video id="bonus-video" playsinline muted></video>
   <p id="celebration-sub">Get ready for the next one…</p>
+  <button class="big" id="btn-celebration-next" type="button">Next exercise</button>
+</div>
+
+<div id="mini-game" aria-live="polite">
+  <h2 id="mini-game-title">Catch Gabby!</h2>
+  <p id="mini-game-meta">Score <strong id="mini-game-score">0</strong> · <span id="mini-game-time">8</span>s left</p>
+  <div id="mini-game-stage">
+    <button type="button" id="mini-gabby" aria-label="Catch Gabby">
+      <img src="gabby.png" alt="">
+    </button>
+  </div>
+  <p id="mini-game-result" hidden></p>
+  <button class="big" id="mini-game-continue" type="button">Keep celebrating!</button>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -2268,6 +2370,7 @@ function clearDailyGoalTimers() {
 function clearDailyGoalCelebration() {
   clearDailyGoalTimers();
   stopDailyGoalAudio();
+  stopCatchGabbyMiniGame(true);
   const finish = $('screen-finish');
   if (finish) finish.classList.remove('daily-goal');
 }
@@ -2430,7 +2533,192 @@ function stampFinishStar(completed, goal) {
   if (!soundMuted) sounds.sparkle();
 }
 
-/** Star stamp first, then the big daily-goal party. */
+/* ---------- Catch Gabby mini-game (daily goal surprise) ---------- */
+const catchGabby = {
+  active: false,
+  score: 0,
+  secondsLeft: 8,
+  raf: 0,
+  tickId: 0,
+  x: 0,
+  y: 0,
+  vx: 0,
+  vy: 0,
+  size: 88,
+  onDone: null,
+};
+
+function stopCatchGabbyMiniGame(silent = false) {
+  catchGabby.active = false;
+  if (catchGabby.raf) {
+    cancelAnimationFrame(catchGabby.raf);
+    catchGabby.raf = 0;
+  }
+  if (catchGabby.tickId) {
+    clearInterval(catchGabby.tickId);
+    catchGabby.tickId = 0;
+  }
+  $('mini-game').classList.remove('active');
+  $('mini-game-result').hidden = true;
+  $('mini-game-continue').classList.remove('active');
+  if (!silent && typeof catchGabby.onDone === 'function') {
+    const done = catchGabby.onDone;
+    catchGabby.onDone = null;
+    done();
+  } else {
+    catchGabby.onDone = null;
+  }
+}
+
+function startCatchGabbyMiniGame(onDone) {
+  stopCatchGabbyMiniGame(true);
+  catchGabby.onDone = onDone || null;
+  catchGabby.active = true;
+  catchGabby.score = 0;
+  catchGabby.secondsLeft = 8;
+  catchGabby.size = Math.round(Math.min(110, Math.max(72, Math.min(W(), H()) * 0.16)));
+
+  const btn = $('mini-gabby');
+  btn.style.width = catchGabby.size + 'px';
+  btn.style.height = catchGabby.size + 'px';
+  btn.classList.remove('pop');
+
+  $('mini-game-score').textContent = '0';
+  $('mini-game-time').textContent = String(catchGabby.secondsLeft);
+  $('mini-game-title').textContent = 'Catch Gabby!';
+  $('mini-game-result').hidden = true;
+  $('mini-game-continue').classList.remove('active');
+  $('mini-game').classList.add('active');
+
+  // Place Gabby after layout so stage has size
+  requestAnimationFrame(() => {
+    if (!catchGabby.active) return;
+    const stage = $('mini-game-stage');
+    const sw = stage.clientWidth || W();
+    const sh = stage.clientHeight || Math.max(220, H() * 0.45);
+    const r = catchGabby.size / 2;
+    catchGabby.x = rand(r, Math.max(r + 1, sw - r));
+    catchGabby.y = rand(r, Math.max(r + 1, sh - r));
+    const speed = rand(3.2, 5.2);
+    const angle = rand(0.4, Math.PI * 2 - 0.4);
+    catchGabby.vx = Math.cos(angle) * speed;
+    catchGabby.vy = Math.sin(angle) * speed;
+    drawCatchGabby();
+    catchGabbyLoop();
+  });
+
+  if (!soundMuted) sounds.goBeep();
+  catchGabby.tickId = setInterval(() => {
+    if (!catchGabby.active) return;
+    catchGabby.secondsLeft -= 1;
+    $('mini-game-time').textContent = String(Math.max(0, catchGabby.secondsLeft));
+    if (catchGabby.secondsLeft <= 0) finishCatchGabbyMiniGame();
+  }, 1000);
+}
+
+function drawCatchGabby() {
+  const btn = $('mini-gabby');
+  btn.style.transform = `translate(${catchGabby.x - catchGabby.size / 2}px, ${catchGabby.y - catchGabby.size / 2}px)`;
+}
+
+function catchGabbyLoop() {
+  if (!catchGabby.active) return;
+  catchGabby.raf = requestAnimationFrame(catchGabbyLoop);
+  if (catchGabby.secondsLeft <= 0) return;
+
+  const stage = $('mini-game-stage');
+  const sw = stage.clientWidth || W();
+  const sh = stage.clientHeight || Math.max(220, H() * 0.45);
+  const r = catchGabby.size / 2;
+
+  catchGabby.x += catchGabby.vx;
+  catchGabby.y += catchGabby.vy;
+
+  if (catchGabby.x <= r) { catchGabby.x = r; catchGabby.vx = Math.abs(catchGabby.vx); }
+  else if (catchGabby.x >= sw - r) { catchGabby.x = sw - r; catchGabby.vx = -Math.abs(catchGabby.vx); }
+  if (catchGabby.y <= r) { catchGabby.y = r; catchGabby.vy = Math.abs(catchGabby.vy); }
+  else if (catchGabby.y >= sh - r) { catchGabby.y = sh - r; catchGabby.vy = -Math.abs(catchGabby.vy); }
+
+  // Occasional zip for unpredictability
+  if (Math.random() < 0.012) {
+    catchGabby.vx += rand(-2.5, 2.5);
+    catchGabby.vy += rand(-2.5, 2.5);
+    const sp = Math.hypot(catchGabby.vx, catchGabby.vy) || 1;
+    const target = rand(3.5, 6.2);
+    catchGabby.vx = (catchGabby.vx / sp) * target;
+    catchGabby.vy = (catchGabby.vy / sp) * target;
+  }
+
+  drawCatchGabby();
+}
+
+function onCatchGabbyTap(e) {
+  if (!catchGabby.active || catchGabby.secondsLeft <= 0) return;
+  e.preventDefault();
+  catchGabby.score += 1;
+  $('mini-game-score').textContent = String(catchGabby.score);
+
+  const btn = $('mini-gabby');
+  btn.classList.remove('pop');
+  void btn.offsetWidth;
+  btn.classList.add('pop');
+
+  // Bounce away from the tap
+  const stage = $('mini-game-stage');
+  const sw = stage.clientWidth || W();
+  const sh = stage.clientHeight || Math.max(220, H() * 0.45);
+  const r = catchGabby.size / 2;
+  const angle = rand(0, Math.PI * 2);
+  const boost = rand(5, 8);
+  catchGabby.vx = Math.cos(angle) * boost;
+  catchGabby.vy = Math.sin(angle) * boost;
+  catchGabby.x = Math.min(sw - r, Math.max(r, catchGabby.x + catchGabby.vx * 2));
+  catchGabby.y = Math.min(sh - r, Math.max(r, catchGabby.y + catchGabby.vy * 2));
+  drawCatchGabby();
+
+  if (!soundMuted) {
+    if (catchGabby.score % 5 === 0) sounds.cheer();
+    else sounds.repDone();
+  }
+  flash();
+}
+
+function finishCatchGabbyMiniGame() {
+  if (!catchGabby.active) return;
+  catchGabby.active = false;
+  if (catchGabby.raf) {
+    cancelAnimationFrame(catchGabby.raf);
+    catchGabby.raf = 0;
+  }
+  if (catchGabby.tickId) {
+    clearInterval(catchGabby.tickId);
+    catchGabby.tickId = 0;
+  }
+
+  const n = catchGabby.score;
+  const result = $('mini-game-result');
+  result.hidden = false;
+  if (n === 0) result.textContent = 'Gabby got away this time!';
+  else if (n < 5) result.textContent = `Nice — ${n} catch${n === 1 ? '' : 'es'}!`;
+  else if (n < 12) result.textContent = `Awesome — ${n} catches!!`;
+  else result.textContent = `Unstoppable — ${n} catches!!!`;
+
+  $('mini-game-title').textContent = 'Round over!';
+  $('mini-game-continue').classList.add('active');
+  if (!soundMuted) sounds.fanfare();
+  confettiBurst();
+  startFx();
+}
+
+function continueAfterCatchGabby() {
+  const done = catchGabby.onDone;
+  catchGabby.onDone = null;
+  $('mini-game').classList.remove('active');
+  $('mini-game-continue').classList.remove('active');
+  if (typeof done === 'function') done();
+}
+
+/** Star stamp first, then optionally a mini-game, then the big daily-goal party. */
 function beginDailyGoalFinale(completed, goal) {
   $('finish-title').textContent = 'One more star…';
   // Show goal row with the new star still empty, then stamp it in.
@@ -2444,10 +2732,12 @@ function beginDailyGoalFinale(completed, goal) {
     $('screen-finish').classList.add('daily-goal');
   }, 500));
 
-  // star-stamp is ~900ms — wait for it, then party
+  // star-stamp is ~900ms — wait for it, then maybe mini-game, then party
   dailyGoalTimers.push(setTimeout(() => {
     if (!screens.finish.classList.contains('active')) return;
-    startDailyGoalCelebration();
+    const playMini = Math.random() < 0.4;
+    if (playMini) startCatchGabbyMiniGame(() => startDailyGoalCelebration());
+    else startDailyGoalCelebration();
   }, 500 + 1100));
 }
 
@@ -3453,6 +3743,7 @@ function celebrate() {
   $('celebration-sub').textContent = isLast
     ? 'That was the last one!!'
     : `Next up: ${next.name} ${next.emoji || ''}`;
+  $('btn-celebration-next').textContent = isLast ? 'Finish session' : 'Next exercise';
 
   const row = $('dance-row');
   row.innerHTML = '';
@@ -3474,17 +3765,25 @@ function celebrate() {
   state.celebrationEndsAt = started + minMs;
   updateSessionEta(true);
   playBonusVideoOnce().then(() => {
+    if (!$('celebration').classList.contains('active')) return;
     const remaining = Math.max(0, minMs - (Date.now() - started));
     state.celebrationEndsAt = Date.now() + remaining;
     updateSessionEta(true);
     state.celebrationTimerId = setTimeout(() => {
-      state.celebrationTimerId = null;
-      state.celebrationEndsAt = null;
-      stopBonusVideo();
-      $('celebration').classList.remove('active');
-      nextExercise();
+      endCelebration();
     }, remaining);
   });
+}
+
+function endCelebration() {
+  if (state.celebrationTimerId) {
+    clearTimeout(state.celebrationTimerId);
+    state.celebrationTimerId = null;
+  }
+  state.celebrationEndsAt = null;
+  stopBonusVideo();
+  $('celebration').classList.remove('active');
+  nextExercise();
 }
 
 function nextExercise() {
@@ -3662,6 +3961,12 @@ $('btn-mute').addEventListener('click', toggleSoundMute);
 $('btn-mute-between').addEventListener('click', toggleSoundMute);
 $('btn-count').addEventListener('click', onCountTap);
 $('btn-skip-between').addEventListener('click', endBetweenEarly);
+$('btn-celebration-next').addEventListener('click', () => {
+  if (!$('celebration').classList.contains('active')) return;
+  endCelebration();
+});
+$('mini-gabby').addEventListener('pointerdown', onCatchGabbyTap);
+$('mini-game-continue').addEventListener('click', continueAfterCatchGabby);
 syncMuteButtons();
 
 document.addEventListener('keydown', (e) => {
