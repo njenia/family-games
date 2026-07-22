@@ -400,7 +400,7 @@
     min-height: 220px;
     margin: 8px 0;
   }
-  #mini-gabby {
+  .mini-gabby {
     position: absolute;
     left: 0;
     top: 0;
@@ -417,14 +417,14 @@
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
-  #mini-gabby img {
+  .mini-gabby img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
     pointer-events: none;
   }
-  #mini-gabby.pop {
+  .mini-gabby.pop {
     animation: mini-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
   @keyframes mini-pop {
@@ -1463,14 +1463,10 @@
 
 <div id="mini-game" aria-live="polite">
   <h2 id="mini-game-title">Catch Gabby!</h2>
-  <p id="mini-game-meta">Score <strong id="mini-game-score">0</strong> · <span id="mini-game-time">8</span>s left</p>
-  <div id="mini-game-stage">
-    <button type="button" id="mini-gabby" aria-label="Catch Gabby">
-      <img src="gabby.png" alt="">
-    </button>
-  </div>
+  <p id="mini-game-meta">Score <strong id="mini-game-score">0</strong> · <span id="mini-game-time">30</span>s left</p>
+  <div id="mini-game-stage"></div>
   <p id="mini-game-result" hidden></p>
-  <button class="big" id="mini-game-continue" type="button">Keep celebrating!</button>
+  <button class="big" id="mini-game-continue" type="button">All done!</button>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -2512,14 +2508,23 @@ function startDailyGoalCelebration() {
   style.kickoff();
   startFx();
 
-  for (let w = 1; w <= 7; w++) {
+  const waveCount = 7;
+  const waveMs = 1300;
+  for (let w = 1; w <= waveCount; w++) {
     dailyGoalTimers.push(setTimeout(() => {
       if (!screens.finish.classList.contains('active')) return;
       style.wave(w);
       if (!soundMuted && w % 2 === 1) sounds.cheer();
       startFx();
-    }, w * 1300));
+    }, w * waveMs));
   }
+
+  // After the big party, always play Catch Gabby
+  dailyGoalTimers.push(setTimeout(() => {
+    if (!screens.finish.classList.contains('active')) return;
+    stopDailyGoalAudio();
+    startCatchGabbyMiniGame();
+  }, waveCount * waveMs + 900));
 }
 
 function willCompleteDailyGoal() {
@@ -2537,16 +2542,19 @@ function stampFinishStar(completed, goal) {
 const catchGabby = {
   active: false,
   score: 0,
-  secondsLeft: 8,
+  secondsLeft: 30,
   raf: 0,
   tickId: 0,
-  x: 0,
-  y: 0,
-  vx: 0,
-  vy: 0,
   size: 88,
+  actors: [],
   onDone: null,
 };
+
+function clearCatchGabbyActors() {
+  catchGabby.actors = [];
+  const stage = $('mini-game-stage');
+  if (stage) stage.innerHTML = '';
+}
 
 function stopCatchGabbyMiniGame(silent = false) {
   catchGabby.active = false;
@@ -2558,6 +2566,7 @@ function stopCatchGabbyMiniGame(silent = false) {
     clearInterval(catchGabby.tickId);
     catchGabby.tickId = 0;
   }
+  clearCatchGabbyActors();
   $('mini-game').classList.remove('active');
   $('mini-game-result').hidden = true;
   $('mini-game-continue').classList.remove('active');
@@ -2570,18 +2579,39 @@ function stopCatchGabbyMiniGame(silent = false) {
   }
 }
 
+function createCatchGabbyActor(stage, sw, sh, size) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'mini-gabby';
+  btn.setAttribute('aria-label', 'Catch Gabby');
+  btn.style.width = size + 'px';
+  btn.style.height = size + 'px';
+  const img = document.createElement('img');
+  img.src = 'gabby.png';
+  img.alt = '';
+  btn.appendChild(img);
+  stage.appendChild(btn);
+
+  const r = size / 2;
+  const speed = rand(3.2, 5.2);
+  const angle = rand(0.4, Math.PI * 2 - 0.4);
+  return {
+    el: btn,
+    size,
+    x: rand(r, Math.max(r + 1, sw - r)),
+    y: rand(r, Math.max(r + 1, sh - r)),
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+  };
+}
+
 function startCatchGabbyMiniGame(onDone) {
   stopCatchGabbyMiniGame(true);
   catchGabby.onDone = onDone || null;
   catchGabby.active = true;
   catchGabby.score = 0;
-  catchGabby.secondsLeft = 8;
+  catchGabby.secondsLeft = 30;
   catchGabby.size = Math.round(Math.min(110, Math.max(72, Math.min(W(), H()) * 0.16)));
-
-  const btn = $('mini-gabby');
-  btn.style.width = catchGabby.size + 'px';
-  btn.style.height = catchGabby.size + 'px';
-  btn.classList.remove('pop');
 
   $('mini-game-score').textContent = '0';
   $('mini-game-time').textContent = String(catchGabby.secondsLeft);
@@ -2590,20 +2620,19 @@ function startCatchGabbyMiniGame(onDone) {
   $('mini-game-continue').classList.remove('active');
   $('mini-game').classList.add('active');
 
-  // Place Gabby after layout so stage has size
+  // Spawn 1–3 Gabbys after layout so stage has size
   requestAnimationFrame(() => {
     if (!catchGabby.active) return;
     const stage = $('mini-game-stage');
     const sw = stage.clientWidth || W();
     const sh = stage.clientHeight || Math.max(220, H() * 0.45);
-    const r = catchGabby.size / 2;
-    catchGabby.x = rand(r, Math.max(r + 1, sw - r));
-    catchGabby.y = rand(r, Math.max(r + 1, sh - r));
-    const speed = rand(3.2, 5.2);
-    const angle = rand(0.4, Math.PI * 2 - 0.4);
-    catchGabby.vx = Math.cos(angle) * speed;
-    catchGabby.vy = Math.sin(angle) * speed;
-    drawCatchGabby();
+    const count = 1 + Math.floor(Math.random() * 3); // 1, 2, or 3
+    clearCatchGabbyActors();
+    for (let i = 0; i < count; i++) {
+      const size = Math.round(catchGabby.size * (count === 1 ? 1 : rand(0.82, 1)));
+      catchGabby.actors.push(createCatchGabbyActor(stage, sw, sh, size));
+    }
+    drawCatchGabbys();
     catchGabbyLoop();
   });
 
@@ -2616,9 +2645,10 @@ function startCatchGabbyMiniGame(onDone) {
   }, 1000);
 }
 
-function drawCatchGabby() {
-  const btn = $('mini-gabby');
-  btn.style.transform = `translate(${catchGabby.x - catchGabby.size / 2}px, ${catchGabby.y - catchGabby.size / 2}px)`;
+function drawCatchGabbys() {
+  for (const a of catchGabby.actors) {
+    a.el.style.transform = `translate(${a.x - a.size / 2}px, ${a.y - a.size / 2}px)`;
+  }
 }
 
 function catchGabbyLoop() {
@@ -2629,52 +2659,59 @@ function catchGabbyLoop() {
   const stage = $('mini-game-stage');
   const sw = stage.clientWidth || W();
   const sh = stage.clientHeight || Math.max(220, H() * 0.45);
-  const r = catchGabby.size / 2;
 
-  catchGabby.x += catchGabby.vx;
-  catchGabby.y += catchGabby.vy;
+  for (const a of catchGabby.actors) {
+    const r = a.size / 2;
+    a.x += a.vx;
+    a.y += a.vy;
 
-  if (catchGabby.x <= r) { catchGabby.x = r; catchGabby.vx = Math.abs(catchGabby.vx); }
-  else if (catchGabby.x >= sw - r) { catchGabby.x = sw - r; catchGabby.vx = -Math.abs(catchGabby.vx); }
-  if (catchGabby.y <= r) { catchGabby.y = r; catchGabby.vy = Math.abs(catchGabby.vy); }
-  else if (catchGabby.y >= sh - r) { catchGabby.y = sh - r; catchGabby.vy = -Math.abs(catchGabby.vy); }
+    if (a.x <= r) { a.x = r; a.vx = Math.abs(a.vx); }
+    else if (a.x >= sw - r) { a.x = sw - r; a.vx = -Math.abs(a.vx); }
+    if (a.y <= r) { a.y = r; a.vy = Math.abs(a.vy); }
+    else if (a.y >= sh - r) { a.y = sh - r; a.vy = -Math.abs(a.vy); }
 
-  // Occasional zip for unpredictability
-  if (Math.random() < 0.012) {
-    catchGabby.vx += rand(-2.5, 2.5);
-    catchGabby.vy += rand(-2.5, 2.5);
-    const sp = Math.hypot(catchGabby.vx, catchGabby.vy) || 1;
-    const target = rand(3.5, 6.2);
-    catchGabby.vx = (catchGabby.vx / sp) * target;
-    catchGabby.vy = (catchGabby.vy / sp) * target;
+    // Occasional zip for unpredictability
+    if (Math.random() < 0.012) {
+      a.vx += rand(-2.5, 2.5);
+      a.vy += rand(-2.5, 2.5);
+      const sp = Math.hypot(a.vx, a.vy) || 1;
+      const target = rand(3.5, 6.2);
+      a.vx = (a.vx / sp) * target;
+      a.vy = (a.vy / sp) * target;
+    }
   }
 
-  drawCatchGabby();
+  drawCatchGabbys();
 }
 
 function onCatchGabbyTap(e) {
   if (!catchGabby.active || catchGabby.secondsLeft <= 0) return;
+  const btn = e.target && e.target.closest ? e.target.closest('.mini-gabby') : null;
+  if (!btn) return;
   e.preventDefault();
+
+  const actor = catchGabby.actors.find((a) => a.el === btn);
+  if (!actor) return;
+
   catchGabby.score += 1;
   $('mini-game-score').textContent = String(catchGabby.score);
 
-  const btn = $('mini-gabby');
   btn.classList.remove('pop');
   void btn.offsetWidth;
   btn.classList.add('pop');
 
-  // Bounce away from the tap
+  // Bounce this Gabby away from the tap
   const stage = $('mini-game-stage');
   const sw = stage.clientWidth || W();
   const sh = stage.clientHeight || Math.max(220, H() * 0.45);
-  const r = catchGabby.size / 2;
+  const r = actor.size / 2;
   const angle = rand(0, Math.PI * 2);
   const boost = rand(5, 8);
-  catchGabby.vx = Math.cos(angle) * boost;
-  catchGabby.vy = Math.sin(angle) * boost;
-  catchGabby.x = Math.min(sw - r, Math.max(r, catchGabby.x + catchGabby.vx * 2));
-  catchGabby.y = Math.min(sh - r, Math.max(r, catchGabby.y + catchGabby.vy * 2));
-  drawCatchGabby();
+  actor.vx = Math.cos(angle) * boost;
+  actor.vy = Math.sin(angle) * boost;
+  actor.x = Math.min(sw - r, Math.max(r, actor.x + actor.vx * 2));
+  actor.y = Math.min(sh - r, Math.max(r, actor.y + actor.vy * 2));
+  drawCatchGabbys();
 
   if (!soundMuted) {
     if (catchGabby.score % 5 === 0) sounds.cheer();
@@ -2699,8 +2736,8 @@ function finishCatchGabbyMiniGame() {
   const result = $('mini-game-result');
   result.hidden = false;
   if (n === 0) result.textContent = 'Gabby got away this time!';
-  else if (n < 5) result.textContent = `Nice — ${n} catch${n === 1 ? '' : 'es'}!`;
-  else if (n < 12) result.textContent = `Awesome — ${n} catches!!`;
+  else if (n < 8) result.textContent = `Nice — ${n} catch${n === 1 ? '' : 'es'}!`;
+  else if (n < 20) result.textContent = `Awesome — ${n} catches!!`;
   else result.textContent = `Unstoppable — ${n} catches!!!`;
 
   $('mini-game-title').textContent = 'Round over!';
@@ -2713,12 +2750,13 @@ function finishCatchGabbyMiniGame() {
 function continueAfterCatchGabby() {
   const done = catchGabby.onDone;
   catchGabby.onDone = null;
+  clearCatchGabbyActors();
   $('mini-game').classList.remove('active');
   $('mini-game-continue').classList.remove('active');
   if (typeof done === 'function') done();
 }
 
-/** Star stamp first, then optionally a mini-game, then the big daily-goal party. */
+/** Star stamp first, then the big daily-goal party, then Catch Gabby. */
 function beginDailyGoalFinale(completed, goal) {
   $('finish-title').textContent = 'One more star…';
   // Show goal row with the new star still empty, then stamp it in.
@@ -2732,10 +2770,10 @@ function beginDailyGoalFinale(completed, goal) {
     $('screen-finish').classList.add('daily-goal');
   }, 500));
 
-  // star-stamp is ~900ms — then always play Catch Gabby, then the party
+  // star-stamp is ~900ms — then the party (mini-game follows after)
   dailyGoalTimers.push(setTimeout(() => {
     if (!screens.finish.classList.contains('active')) return;
-    startCatchGabbyMiniGame(() => startDailyGoalCelebration());
+    startDailyGoalCelebration();
   }, 500 + 1100));
 }
 
@@ -3996,7 +4034,7 @@ $('btn-celebration-next').addEventListener('click', () => {
   if (!$('celebration').classList.contains('active')) return;
   endCelebration();
 });
-$('mini-gabby').addEventListener('pointerdown', onCatchGabbyTap);
+$('mini-game-stage').addEventListener('pointerdown', onCatchGabbyTap);
 $('mini-game-continue').addEventListener('click', continueAfterCatchGabby);
 syncMuteButtons();
 
