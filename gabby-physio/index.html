@@ -2732,12 +2732,10 @@ function beginDailyGoalFinale(completed, goal) {
     $('screen-finish').classList.add('daily-goal');
   }, 500));
 
-  // star-stamp is ~900ms — wait for it, then maybe mini-game, then party
+  // star-stamp is ~900ms — then always play Catch Gabby, then the party
   dailyGoalTimers.push(setTimeout(() => {
     if (!screens.finish.classList.contains('active')) return;
-    const playMini = Math.random() < 0.4;
-    if (playMini) startCatchGabbyMiniGame(() => startDailyGoalCelebration());
-    else startDailyGoalCelebration();
+    startCatchGabbyMiniGame(() => startDailyGoalCelebration());
   }, 500 + 1100));
 }
 
@@ -3876,6 +3874,38 @@ async function recordSessionComplete(opts = {}) {
   }
 }
 
+/* ============================== screen wake lock ============================== */
+let wakeLock = null;
+let keepScreenAwake = false;
+
+async function acquireWakeLock() {
+  if (!keepScreenAwake) return;
+  if (!('wakeLock' in navigator)) return;
+  try {
+    if (wakeLock) return;
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch (_) {
+    // Unsupported, denied, or battery saver — ignore
+  }
+}
+
+function startKeepingScreenAwake() {
+  keepScreenAwake = true;
+  acquireWakeLock();
+}
+
+async function stopKeepingScreenAwake() {
+  keepScreenAwake = false;
+  if (!wakeLock) return;
+  try { await wakeLock.release(); } catch (_) {}
+  wakeLock = null;
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && keepScreenAwake) acquireWakeLock();
+});
+
 function beginSession() {
   ctx();
   state.exercise = 0;
@@ -3885,6 +3915,7 @@ function beginSession() {
   music.paused = false;
   stopBetweenTimer();
   stopDemoVideo();
+  startKeepingScreenAwake();
   api('POST', '/api/sessions', { localDate: localDateStr(), exercisesTotal: EXERCISES.length })
     .then((data) => { state.sessionId = data.id; })
     .catch(() => {});
@@ -4125,6 +4156,7 @@ function showAuth() {
   ME = null;
   $('topbar').classList.remove('active');
   hideSessionEta();
+  stopKeepingScreenAwake();
   setAuthMode('login');
   showScreen('auth');
 }
@@ -4354,6 +4386,7 @@ $('btn-settings-back').addEventListener('click', () => { renderStartScreen(); sh
 $('btn-finish-home').addEventListener('click', () => {
   clearDailyGoalCelebration();
   particles = [];
+  stopKeepingScreenAwake();
   renderStartScreen();
   showScreen('start');
   refreshMe();
