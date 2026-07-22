@@ -372,7 +372,7 @@
     justify-content: flex-start;
     gap: 10px;
     padding: max(20px, var(--safe-top)) max(16px, var(--safe-right)) max(20px, var(--safe-bottom)) max(16px, var(--safe-left));
-    background: rgba(15, 8, 40, 0.82);
+    background: rgba(15, 8, 40, 0.94);
     backdrop-filter: blur(4px);
     text-align: center;
     overflow: hidden;
@@ -2363,10 +2363,22 @@ function clearDailyGoalTimers() {
   dailyGoalTimers = [];
 }
 
+/** Fully stop celebration FX/audio so the mini-game isn't running over the party. */
+function endDailyGoalPartyFx() {
+  clearDailyGoalTimers();
+  stopDailyGoalAudio();
+  particles = [];
+  fxRunning = false;
+  if (fx) fx.clearRect(0, 0, W(), H());
+}
+
 function clearDailyGoalCelebration() {
   clearDailyGoalTimers();
   stopDailyGoalAudio();
   stopCatchGabbyMiniGame(true);
+  particles = [];
+  fxRunning = false;
+  if (fx) fx.clearRect(0, 0, W(), H());
   const finish = $('screen-finish');
   if (finish) finish.classList.remove('daily-goal');
 }
@@ -2519,12 +2531,13 @@ function startDailyGoalCelebration() {
     }, w * waveMs));
   }
 
-  // After the big party, always play Catch Gabby
+  // After the big party fully ends, start Catch Gabby on a clean screen
   dailyGoalTimers.push(setTimeout(() => {
     if (!screens.finish.classList.contains('active')) return;
-    stopDailyGoalAudio();
+    endDailyGoalPartyFx();
+    $('finish-title').textContent = 'Bonus round!';
     startCatchGabbyMiniGame();
-  }, waveCount * waveMs + 900));
+  }, waveCount * waveMs + 1200));
 }
 
 function willCompleteDailyGoal() {
