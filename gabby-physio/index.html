@@ -873,6 +873,16 @@
     font-size: 1.15rem;
     font-variant-numeric: tabular-nums;
   }
+  #profile-high-score {
+    margin-top: 4px;
+    font-size: 0.9rem;
+    color: rgba(255,255,255,0.8);
+  }
+  #profile-high-score strong {
+    color: var(--accent);
+    font-size: 1.1rem;
+    font-variant-numeric: tabular-nums;
+  }
 
   #week-panel {
     width: 100%;
@@ -1343,6 +1353,7 @@
           <div class="profile-meta">
             <div id="profile-name">Player</div>
             <div id="profile-total"><strong>0</strong> total sessions</div>
+            <div id="profile-high-score">Catch Gabby best: <strong>—</strong></div>
           </div>
         </div>
         <div class="today-block">
@@ -2733,7 +2744,28 @@ function onCatchGabbyTap(e) {
   flash();
 }
 
-function finishCatchGabbyMiniGame() {
+function playCatchGabbyRecordCelebration() {
+  playDailyGoalMusic();
+  spawnBouncingGabbys(22);
+  megaGabby();
+  confettiBurst();
+  fireworks();
+  sideCannons();
+  startFx();
+  for (let w = 1; w <= 4; w++) {
+    dailyGoalTimers.push(setTimeout(() => {
+      if (!$('mini-game').classList.contains('active')) return;
+      spawnBouncingGabbys(12);
+      confettiBurst();
+      if (w % 2 === 0) fireworks();
+      if (w === 2) megaGabby();
+      if (!soundMuted) sounds.cheer();
+      startFx();
+    }, w * 900));
+  }
+}
+
+async function finishCatchGabbyMiniGame() {
   if (!catchGabby.active) return;
   catchGabby.active = false;
   if (catchGabby.raf) {
@@ -2746,23 +2778,41 @@ function finishCatchGabbyMiniGame() {
   }
 
   const n = catchGabby.score;
+  let isNewRecord = false;
+  let highScore = (ME && ME.user && ME.user.catchGabbyHighScore) || 0;
+  try {
+    const data = await api('POST', '/api/me/catch-gabby', { score: n });
+    isNewRecord = !!data.isNewRecord;
+    highScore = data.highScore;
+    if (ME && data.user) ME.user = data.user;
+  } catch (_) {}
+
   const result = $('mini-game-result');
   result.hidden = false;
-  if (n === 0) result.textContent = 'Gabby got away this time!';
-  else if (n < 8) result.textContent = `Nice — ${n} catch${n === 1 ? '' : 'es'}!`;
-  else if (n < 20) result.textContent = `Awesome — ${n} catches!!`;
-  else result.textContent = `Unstoppable — ${n} catches!!!`;
 
-  $('mini-game-title').textContent = 'Round over!';
+  if (isNewRecord) {
+    $('mini-game-title').textContent = 'New high score!!';
+    result.textContent = `NEW RECORD — ${n} catch${n === 1 ? '' : 'es'}!!`;
+    playCatchGabbyRecordCelebration();
+  } else {
+    if (n === 0) result.textContent = 'Gabby got away this time!';
+    else if (n < 8) result.textContent = `Nice — ${n} catch${n === 1 ? '' : 'es'}!`;
+    else if (n < 20) result.textContent = `Awesome — ${n} catches!!`;
+    else result.textContent = `Unstoppable — ${n} catches!!!`;
+    if (highScore > 0) result.textContent += ` · Best ${highScore}`;
+    $('mini-game-title').textContent = 'Round over!';
+    if (!soundMuted) sounds.fanfare();
+    confettiBurst();
+    startFx();
+  }
+
   $('mini-game-continue').classList.add('active');
-  if (!soundMuted) sounds.fanfare();
-  confettiBurst();
-  startFx();
 }
 
 function continueAfterCatchGabby() {
   const done = catchGabby.onDone;
   catchGabby.onDone = null;
+  endDailyGoalPartyFx();
   clearCatchGabbyActors();
   $('mini-game').classList.remove('active');
   $('mini-game-continue').classList.remove('active');
@@ -4307,6 +4357,10 @@ function renderStartScreen() {
   $('profile-name').textContent = name;
   $('profile-total').innerHTML =
     `<strong>${total}</strong> total session${total === 1 ? '' : 's'}`;
+  const highScore = ME.user.catchGabbyHighScore || 0;
+  $('profile-high-score').innerHTML = highScore > 0
+    ? `Catch Gabby best: <strong>${highScore}</strong>`
+    : 'Catch Gabby best: <strong>—</strong>';
   renderStars($('today-stars'), completed, goal);
   renderWeekTable(ME.week, goal, date || localDateStr());
   $('goal-num').textContent = goal;

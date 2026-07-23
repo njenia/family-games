@@ -46,6 +46,7 @@ function publicUser(profile) {
     displayName: profile.display_name,
     dailyGoal: profile.daily_goal,
     avatarUrl: profile.avatar_url || null,
+    catchGabbyHighScore: profile.catch_gabby_high_score || 0,
   };
 }
 
@@ -255,6 +256,33 @@ app.patch('/api/me', requireAuth, wrap(async (req, res) => {
     .update(patch).eq('user_id', req.user.user_id).select().single();
   if (error) throw error;
   res.json({ user: publicUser(data) });
+}));
+
+/** Submit a Catch Gabby score; updates the profile only when it beats the high score. */
+app.post('/api/me/catch-gabby', requireAuth, wrap(async (req, res) => {
+  const score = parseInt(req.body && req.body.score, 10);
+  if (!(Number.isFinite(score) && score >= 0 && score <= 10000)) {
+    return res.status(400).json({ error: 'Score must be between 0 and 10000' });
+  }
+  const current = req.user.catch_gabby_high_score || 0;
+  if (score <= current) {
+    return res.json({
+      highScore: current,
+      isNewRecord: false,
+      user: publicUser(req.user),
+    });
+  }
+  const { data, error } = await sb.from('profiles')
+    .update({ catch_gabby_high_score: score })
+    .eq('user_id', req.user.user_id)
+    .select()
+    .single();
+  if (error) throw error;
+  res.json({
+    highScore: score,
+    isNewRecord: true,
+    user: publicUser(data),
+  });
 }));
 
 app.post('/api/me/avatar', requireAuth, wrap(async (req, res) => {
