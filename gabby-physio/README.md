@@ -59,6 +59,14 @@ Defined in `supabase/migrations/0001_init.sql`:
 
 ## Maintenance
 
-`npm run sync` regenerates `exercises.js` / `bonus-videos.js` from
-`exercises.json` and the bonus video folder (offline fallback + seed for new
-accounts).
+`npm run sync` regenerates `bonus-videos.js` from the bonus video folder.
+New accounts are seeded from `exercises.json` (the single exercise-config source
+of truth) into each user's scheme in the database. `GET /api/scheme` also reloads
+that file so existing accounts stay in sync when the scheme changes.
+
+Exercise demo clips are resolved by convention (not listed in JSON):
+
+- timed: `video/<id> work.mov`, `video/<id> rest.mov`
+- dual / count: `video/<id> <key>.mov` where `<key>` is the last word of the
+  phase label (lowercased), e.g. `Hold Up` → `video/elbow-bending up.mov`
+- optional `"key"` on a phase overrides the label-derived suffix

@@ -325,7 +325,13 @@ app.post('/api/me/avatar', requireAuth, wrap(async (req, res) => {
 app.get('/api/scheme', requireAuth, wrap(async (req, res) => {
   const scheme = await activeScheme(req.user.user_id);
   if (!scheme) return res.status(404).json({ error: 'No exercise scheme found' });
-  res.json({ id: scheme.id, name: scheme.name, config: scheme.config });
+  // exercises.json is the live source of truth; keep the DB copy in sync.
+  const config = defaultSchemeConfig();
+  const { error } = await sb.from('schemes')
+    .update({ config, updated_at: new Date().toISOString() })
+    .eq('id', scheme.id);
+  if (error) throw error;
+  res.json({ id: scheme.id, name: scheme.name, config });
 }));
 
 app.put('/api/scheme', requireAuth, wrap(async (req, res) => {

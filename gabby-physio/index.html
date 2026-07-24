@@ -1481,7 +1481,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="exercises.js"></script>
 <script src="bonus-videos.js"></script>
 <script>
 'use strict';
@@ -3137,9 +3136,15 @@ function setBetweenVisual(ex) {
 
 function getWorkVideo(ex) {
   if (!ex) return null;
-  if (ex.mode === 'timed') return (ex.videos && ex.videos.work) || null;
-  if (ex.mode === 'dual') return (ex.phases && ex.phases[0] && ex.phases[0].video) || null;
-  if (ex.mode === 'count') return (ex.sequence && ex.sequence[0] && ex.sequence[0].video) || null;
+  if (ex.mode === 'timed') return exerciseVideoPath(ex.id, 'work');
+  if (ex.mode === 'dual') {
+    const phase = ex.phases && ex.phases[0];
+    return phase ? exerciseVideoPath(ex.id, phaseVideoSuffix(phase)) : null;
+  }
+  if (ex.mode === 'count') {
+    const step = ex.sequence && ex.sequence[0];
+    return step ? exerciseVideoPath(ex.id, phaseVideoSuffix(step, 1)) : null;
+  }
   return null;
 }
 
@@ -3181,6 +3186,30 @@ function playBetweenPreviewVideo(ex) {
 }
 
 /* ---------- demo videos (play once per phase) ---------- */
+
+/**
+ * Video paths are by convention (not listed in exercises.json):
+ *   timed  → video/<id> work.mov | video/<id> rest.mov
+ *   dual   → video/<id> <phase-key>.mov
+ *   count  → video/<id> <step-key>.mov
+ * Phase/step key = last word of the label, lowercased (e.g. "Hold Up" → "up").
+ * Optional phase.key overrides the label-derived suffix.
+ */
+function phaseVideoSuffix(phase, fallbackIndex) {
+  if (phase && phase.key) return String(phase.key).trim().toLowerCase();
+  const label = phase && phase.label ? String(phase.label).trim() : '';
+  if (label) {
+    const parts = label.split(/\s+/);
+    return parts[parts.length - 1].toLowerCase();
+  }
+  return String(fallbackIndex || 1);
+}
+
+function exerciseVideoPath(id, suffix) {
+  if (!id || !suffix) return null;
+  return `video/${id} ${suffix}.mov`;
+}
+
 function stopDemoVideo() {
   const v = $('exercise-video');
   v.pause();
@@ -3228,22 +3257,21 @@ function resumeDemoVideo() {
 }
 
 function playTimedPhaseVideo(ex, phase) {
-  const vids = ex.videos || {};
-  playDemoVideo(phase === 'work' ? vids.work : vids.rest);
+  playDemoVideo(exerciseVideoPath(ex.id, phase === 'work' ? 'work' : 'rest'));
 }
 
 function playDualPhaseVideo(ex) {
   if (state.phase === 'rest') {
-    playDemoVideo(ex.videos && ex.videos.rest);
+    playDemoVideo(exerciseVideoPath(ex.id, 'rest'));
     return;
   }
   const p = ex.phases[state.phaseIndex];
-  playDemoVideo(p && p.video);
+  playDemoVideo(p ? exerciseVideoPath(ex.id, phaseVideoSuffix(p, state.phaseIndex + 1)) : null);
 }
 
 function playCountStepVideo(ex) {
   const step = (ex.sequence || [])[state.seqIndex];
-  playDemoVideo(step && step.video);
+  playDemoVideo(step ? exerciseVideoPath(ex.id, phaseVideoSuffix(step, state.seqIndex + 1)) : null);
 }
 
 function stopBonusVideo() {
@@ -4054,6 +4082,7 @@ document.addEventListener('visibilitychange', () => {
 
 function beginSession() {
   ctx();
+  EXERCISES = exercisesForThisSession();
   state.exercise = 0;
   state.paused = false;
   state.exercisesDone = 0;
@@ -4284,6 +4313,21 @@ function applyConfig(config) {
     $('app-title').textContent = config.title;
   }
   $('btn-start').disabled = EXERCISES.length === 0;
+}
+
+/** Today's session number (1-based): after N completed sessions, the next one is N+1. */
+function todaySessionNumber() {
+  return ((ME && ME.today && ME.today.completed) || 0) + 1;
+}
+
+/** Drop exercises limited to specific daily session slots (e.g. only sessions 2, 4, 6). */
+function exercisesForThisSession() {
+  const sessionNum = todaySessionNumber();
+  return (CONFIG.exercises || []).filter((ex) => {
+    const slots = ex.onlyDailySessions;
+    if (!Array.isArray(slots) || slots.length === 0) return true;
+    return slots.includes(sessionNum);
+  });
 }
 
 /* ============================== auth ui ============================== */
