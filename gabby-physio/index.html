@@ -763,6 +763,25 @@
   #session-eta .eta-sep { color: rgba(255,255,255,0.35); font-weight: 500; }
   #session-left { color: var(--accent); }
   #session-finish { color: rgba(255,255,255,0.85); }
+  #eta-ring {
+    width: 1.2em;
+    height: 1.2em;
+    flex-shrink: 0;
+    display: block;
+    transform: rotate(-90deg);
+  }
+  #eta-ring-track {
+    fill: none;
+    stroke: rgba(255,255,255,0.22);
+    stroke-width: 2.6;
+  }
+  #eta-ring-fill {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    will-change: stroke-dashoffset;
+  }
 
   body:has(#session-eta.active) #screen-workout,
   body:has(#session-eta.active) #screen-between {
@@ -1336,6 +1355,10 @@
 </header>
 
 <div id="session-eta" aria-live="polite">
+  <svg id="eta-ring" viewBox="0 0 20 20" aria-hidden="true">
+    <circle id="eta-ring-track" cx="10" cy="10" r="7.5"></circle>
+    <circle id="eta-ring-fill" cx="10" cy="10" r="7.5"></circle>
+  </svg>
   <span id="session-left">0:00 left</span>
   <span class="eta-sep" aria-hidden="true">·</span>
   <span id="session-finish">Finish at —</span>
@@ -3062,6 +3085,9 @@ const screens = {
 };
 const RING_LEN = 2 * Math.PI * 52;
 $('ring-fill').style.strokeDasharray = RING_LEN;
+const ETA_RING_LEN = 2 * Math.PI * 7.5;
+$('eta-ring-fill').style.strokeDasharray = ETA_RING_LEN;
+$('eta-ring-fill').style.strokeDashoffset = 0;
 
 function currentExercise() {
   return EXERCISES[state.exercise];
@@ -3100,16 +3126,20 @@ function remainingCurrentExerciseSeconds() {
   const ex = currentExercise();
   if (!ex) return 0;
   const t = resolveTiming(ex);
+  const phaseLeft = (typeof phaseRemainingMs === 'function'
+    && (state.phaseEndsAt != null || state.pauseRemainingMs != null))
+    ? phaseRemainingMs() / 1000
+    : Math.max(0, state.secondsLeft);
 
   if (ex.mode === 'timed') {
     if (state.phase === 'rest') {
       const worksLeft = t.reps - state.rep;
-      return Math.max(0, state.secondsLeft)
+      return Math.max(0, phaseLeft)
         + worksLeft * t.workSeconds
         + Math.max(0, worksLeft - 1) * t.restSeconds;
     }
     // work phase: finish current work, then remaining full reps
-    let rem = Math.max(0, state.secondsLeft);
+    let rem = Math.max(0, phaseLeft);
     const after = t.reps - state.rep - 1;
     if (after > 0) {
       rem += after * t.workSeconds + after * t.restSeconds;
@@ -3122,11 +3152,11 @@ function remainingCurrentExerciseSeconds() {
     const sum = phaseSecondsSum(ex);
     if (state.phase === 'rest') {
       const repsLeft = t.reps - state.rep;
-      return Math.max(0, state.secondsLeft)
+      return Math.max(0, phaseLeft)
         + repsLeft * sum
         + Math.max(0, repsLeft - 1) * (t.restSeconds || 0);
     }
-    let rem = Math.max(0, state.secondsLeft);
+    let rem = Math.max(0, phaseLeft);
     for (let i = state.phaseIndex + 1; i < phases.length; i++) {
       rem += Number(phases[i].seconds) || 0;
     }
@@ -3198,18 +3228,23 @@ function formatFinishClock(date) {
 function showSessionEta() {
   $('session-eta').classList.add('active');
   updateSessionEta(true);
+  startEtaRingAnim();
 }
 
 function hideSessionEta() {
   $('session-eta').classList.remove('active');
   stopEtaTicker();
+  stopEtaRingAnim();
   state.finishAtMs = null;
   state.celebrationEndsAt = null;
+  state.sessionTotalSec = 0;
+  state.etaFrozenLeftMs = null;
 }
 
 function startEtaTicker() {
   stopEtaTicker();
   state.etaTimerId = setInterval(() => updateSessionEta(false), 1000);
+  startEtaRingAnim();
 }
 
 function stopEtaTicker() {
@@ -3219,15 +3254,55 @@ function stopEtaTicker() {
   }
 }
 
+function sessionEtaRemainingMs() {
+  if (state.paused && state.etaFrozenLeftMs != null) {
+    return Math.max(0, state.etaFrozenLeftMs);
+  }
+  if (state.finishAtMs != null) {
+    return Math.max(0, state.finishAtMs - Date.now());
+  }
+  return Math.max(0, remainingSessionSeconds()) * 1000;
+}
+
+function updateEtaRing() {
+  const fill = $('eta-ring-fill');
+  if (!fill) return;
+  const totalMs = Math.max(1, (state.sessionTotalSec || 0) * 1000);
+  const leftMs = sessionEtaRemainingMs();
+  const frac = Math.min(1, Math.max(0, leftMs / totalMs));
+  fill.style.strokeDashoffset = ETA_RING_LEN * (1 - frac);
+}
+
+function startEtaRingAnim() {
+  if (state.etaRaf) return;
+  const frame = () => {
+    state.etaRaf = requestAnimationFrame(frame);
+    if ($('session-eta').classList.contains('active')) updateEtaRing();
+  };
+  state.etaRaf = requestAnimationFrame(frame);
+}
+
+function stopEtaRingAnim() {
+  if (!state.etaRaf) return;
+  cancelAnimationFrame(state.etaRaf);
+  state.etaRaf = 0;
+}
+
 function updateSessionEta(forceFinish = false) {
   const el = $('session-eta');
   if (!el.classList.contains('active')) return;
   const rem = remainingSessionSeconds();
-  $('session-left').textContent = `${formatDuration(rem)} left`;
   if (forceFinish || !state.paused || !state.finishAtMs) {
     state.finishAtMs = Date.now() + rem * 1000;
+    if (!state.paused) state.etaFrozenLeftMs = null;
   }
+  if (!state.sessionTotalSec) {
+    state.sessionTotalSec = Math.max(rem, 1);
+  }
+  const leftSec = sessionEtaRemainingMs() / 1000;
+  $('session-left').textContent = `${formatDuration(leftSec)} left`;
   $('session-finish').textContent = `Finish at ${formatFinishClock(new Date(state.finishAtMs))}`;
+  updateEtaRing();
 }
 
 function setVisual(ex) {
@@ -3483,6 +3558,9 @@ const state = {
   finishAtMs: null,
   celebrationEndsAt: null,
   etaTimerId: null,
+  sessionTotalSec: 0,
+  etaFrozenLeftMs: null,
+  etaRaf: 0,
 };
 
 /* ============================== account / api ============================== */
@@ -4280,6 +4358,8 @@ function beginSession() {
   state.paused = false;
   state.exercisesDone = 0;
   state.sessionId = null;
+  state.sessionTotalSec = 0;
+  state.etaFrozenLeftMs = null;
   music.paused = false;
   stopBetweenTimer();
   stopDemoVideo();
@@ -4289,6 +4369,10 @@ function beginSession() {
     .catch(() => {});
   buildProgressDots();
   syncMuteButtons();
+  // Capture full-session estimate before the first between countdown starts draining.
+  state.between = true;
+  state.betweenLeft = CONFIG.betweenSeconds ?? 8;
+  state.sessionTotalSec = Math.max(1, remainingSessionSeconds());
   showSessionEta();
   startEtaTicker();
   startBetween();
@@ -4328,14 +4412,17 @@ function togglePause() {
     state.paused = !state.paused;
     syncPauseButtons();
     if (state.paused) {
+      state.etaFrozenLeftMs = sessionEtaRemainingMs();
       music.pause();
       $('between-video').pause();
     } else {
+      state.etaFrozenLeftMs = null;
       music.resume();
       const v = $('between-video');
       if (v.classList.contains('active')) v.play().catch(() => {});
       updateSessionEta(true);
     }
+    updateEtaRing();
     return;
   }
   if (!screens.workout.classList.contains('active')) return;
@@ -4346,6 +4433,7 @@ function togglePause() {
   if (state.paused) {
     state.pauseRemainingMs = phaseRemainingMs();
     state.phaseEndsAt = null;
+    state.etaFrozenLeftMs = sessionEtaRemainingMs();
     music.pause();
     pauseDemoVideo();
   } else {
@@ -4354,11 +4442,13 @@ function togglePause() {
       : Math.max(0, state.secondsLeft) * 1000;
     state.phaseEndsAt = Date.now() + left;
     state.pauseRemainingMs = null;
+    state.etaFrozenLeftMs = null;
     music.resume();
     resumeDemoVideo();
     updateSessionEta(true);
   }
   updateRingProgress();
+  updateEtaRing();
 }
 
 $('btn-start').addEventListener('click', beginSession);
