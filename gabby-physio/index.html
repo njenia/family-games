@@ -203,6 +203,7 @@
     stroke-width: 12;
     stroke-linecap: round;
     transition: stroke 0.3s ease;
+    will-change: stroke-dashoffset;
   }
   #ring-center {
     position: absolute; inset: 0;
@@ -472,6 +473,22 @@
     will-change: transform;
   }
   #gabby-pong.active { display: block; }
+
+  #rep-parade {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: min(88px, 18vw);
+    width: auto;
+    max-width: min(160px, 36vw);
+    object-fit: contain;
+    z-index: 27;
+    pointer-events: none;
+    display: none;
+    will-change: transform;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,0.35));
+  }
+  #rep-parade.active { display: block; }
 
   .pulse { animation: pulse 1s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
@@ -1301,6 +1318,7 @@
 <canvas id="fx-canvas"></canvas>
 <div id="flash"></div>
 <img id="gabby-pong" src="gabby.png" alt="">
+<img id="rep-parade" alt="">
 
 <header id="topbar">
   <div id="app-title">Gabby's Physio Adventure</div>
@@ -1482,6 +1500,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="bonus-videos.js"></script>
+<script src="repetition-graphics.js"></script>
 <script>
 'use strict';
 
@@ -1676,7 +1695,7 @@ const music = {
     if (this.mode === 'work' && this.strongAudio && !this.strongAudio.ended) {
       this.strongAudio.play().catch(() => {});
     }
-    if (this.mode === 'rest' && this.restAudio) {
+    if (this.mode === 'rest' && this.restAudio && !this.restAudio.ended) {
       this.restAudio.play().catch(() => {});
     }
     if (this.master && this.mode === 'work') {
@@ -1715,7 +1734,7 @@ const music = {
 
   _startRestBed() {
     const audio = new Audio(REST_TRACK);
-    audio.loop = true;
+    audio.loop = false;
     audio.volume = 0.45;
     this.restAudio = audio;
     if (!this.isSilent()) audio.play().catch(() => {});
@@ -2029,9 +2048,14 @@ const gabbyPong = {
   },
 };
 
-function pickGabbyRep(reps) {
+function pickSpecialReps(reps) {
   const n = Math.max(1, reps | 0);
-  return Math.floor(Math.random() * n);
+  const gabby = Math.floor(Math.random() * n);
+  if (n < 2) return { gabby, graphic: -1 };
+  // Different rep from Gabby's
+  let graphic = Math.floor(Math.random() * (n - 1));
+  if (graphic >= gabby) graphic += 1;
+  return { gabby, graphic };
 }
 
 function syncGabbyPong() {
@@ -2043,6 +2067,104 @@ function syncGabbyPong() {
     state.phase !== 'rest';
   if (activeWork) gabbyPong.start();
   else gabbyPong.stop();
+}
+
+/** Bottom horizontal parade — random graphic from graphics/repititions on its own special rep. */
+const repParade = {
+  active: false,
+  raf: 0,
+  x: 0,
+  y: 0,
+  vx: 0,
+  w: 96,
+  h: 88,
+
+  start() {
+    if (this.active) return;
+    const src = pick(REPETITION_GRAPHICS);
+    if (!src) return;
+    this.active = true;
+    const el = $('rep-parade');
+    this.h = Math.round(Math.min(88, Math.max(56, Math.min(W(), H()) * 0.14)));
+    el.style.height = this.h + 'px';
+    el.style.width = 'auto';
+    if (el.dataset.path !== src) {
+      el.dataset.path = src;
+      el.src = encodeURI(src);
+    }
+    el.classList.add('active');
+
+    const applySize = () => {
+      const nw = el.naturalWidth || this.h;
+      const nh = el.naturalHeight || this.h;
+      this.w = Math.max(40, Math.round(this.h * (nw / Math.max(1, nh))));
+      this.w = Math.min(this.w, Math.round(W() * 0.36));
+    };
+    if (el.complete && el.naturalWidth) applySize();
+    else el.addEventListener('load', applySize, { once: true });
+    applySize();
+
+    const pad = Math.max(12, Math.round(this.h * 0.14));
+    const safeBottom = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom')) || 0;
+    this.x = rand(this.w / 2 + 8, Math.max(this.w / 2 + 16, W() - this.w / 2 - 8));
+    this.y = H() - this.h / 2 - pad - safeBottom;
+    this.vx = (Math.random() < 0.5 ? -1 : 1) * rand(2.6, 4.4);
+    this._draw();
+    this._loop();
+  },
+
+  stop() {
+    this.active = false;
+    if (this.raf) {
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+    }
+    $('rep-parade').classList.remove('active');
+  },
+
+  _draw() {
+    const el = $('rep-parade');
+    el.style.transform = `translate(${this.x - this.w / 2}px, ${this.y - this.h / 2}px)`;
+  },
+
+  _loop() {
+    if (!this.active) return;
+    this.raf = requestAnimationFrame(() => this._loop());
+    if (state.paused) return;
+
+    // Stay pinned to the bottom as the viewport changes
+    const pad = Math.max(12, Math.round(this.h * 0.14));
+    const safeBottom = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom')) || 0;
+    this.y = H() - this.h / 2 - pad - safeBottom;
+    this.x += this.vx;
+    const half = this.w / 2;
+    if (this.x <= half) { this.x = half; this.vx = Math.abs(this.vx); }
+    else if (this.x >= W() - half) { this.x = W() - half; this.vx = -Math.abs(this.vx); }
+
+    this._draw();
+  },
+};
+
+function syncRepParade() {
+  const activeWork =
+    screens.workout.classList.contains('active') &&
+    !state.between &&
+    !$('celebration').classList.contains('active') &&
+    state.graphicRep >= 0 &&
+    state.rep === state.graphicRep &&
+    state.phase !== 'rest';
+  if (activeWork) repParade.start();
+  else repParade.stop();
+}
+
+function syncWorkoutSurprises() {
+  syncGabbyPong();
+  syncRepParade();
+}
+
+function stopWorkoutSurprises() {
+  gabbyPong.stop();
+  repParade.stop();
 }
 
 function gabbyBounce() {
@@ -3336,7 +3458,10 @@ const state = {
   phaseIndex: 0,
   secondsLeft: 5,
   phaseTotal: 5,
+  phaseEndsAt: null,       // wall-clock end of current ring phase
+  pauseRemainingMs: null,  // frozen remainder while paused
   timerId: null,
+  ringRaf: 0,
   paused: false,
   lastFxIndex: -1,
   // count mode
@@ -3350,6 +3475,7 @@ const state = {
   celebrationTimerId: null,
   lastBonusIndex: -1,
   gabbyRep: 0,
+  graphicRep: -1,
   // server session tracking
   sessionId: null,
   exercisesDone: 0,
@@ -3439,7 +3565,7 @@ function jumpToExercise(index) {
 
   stopTimer();
   stopBetweenTimer();
-  gabbyPong.stop();
+  stopWorkoutSurprises();
   stopDemoVideo();
   stopBetweenVideo();
   stopBonusVideo();
@@ -3489,6 +3615,7 @@ function jumpToRep(repIndex) {
     const first = ex.phases[0];
     state.secondsLeft = first.seconds;
     state.phaseTotal = first.seconds;
+    armPhaseClock();
     renderReps('hold');
     renderDualPhase();
     playDualPhaseVideo(ex);
@@ -3496,13 +3623,14 @@ function jumpToRep(repIndex) {
     state.phase = 'work';
     state.secondsLeft = t.workSeconds;
     state.phaseTotal = t.workSeconds;
+    armPhaseClock();
     renderReps('work');
     renderTimer('Go!', 'go', 'var(--go)');
     playTimedPhaseVideo(ex, 'work');
   }
   setWorkoutMusic('work');
   sounds.goBeep();
-  syncGabbyPong();
+  syncWorkoutSurprises();
   startTimer();
   updateSessionEta(true);
 }
@@ -3529,8 +3657,7 @@ function renderTimer(labelText, labelClass, color) {
   label.textContent = labelText;
   label.className = labelClass;
   $('ring-fill').style.stroke = color;
-  const frac = state.phaseTotal > 0 ? state.secondsLeft / state.phaseTotal : 0;
-  $('ring-fill').style.strokeDashoffset = RING_LEN * (1 - frac);
+  updateRingProgress();
 }
 
 function renderCountPanel() {
@@ -3543,6 +3670,53 @@ function renderCountPanel() {
   $('count-display').innerHTML = `${state.count} <span>/ ${target}</span>`;
 }
 
+/** Start a fresh smooth ring countdown for the current secondsLeft / phaseTotal. */
+function armPhaseClock() {
+  state.pauseRemainingMs = null;
+  const ms = Math.max(0, state.secondsLeft) * 1000;
+  if (state.paused) {
+    state.pauseRemainingMs = ms;
+    state.phaseEndsAt = null;
+  } else {
+    state.phaseEndsAt = Date.now() + ms;
+  }
+  updateRingProgress();
+}
+
+function phaseRemainingMs() {
+  if (state.paused && state.pauseRemainingMs != null) {
+    return Math.max(0, state.pauseRemainingMs);
+  }
+  if (state.phaseEndsAt != null) {
+    return Math.max(0, state.phaseEndsAt - Date.now());
+  }
+  return Math.max(0, state.secondsLeft) * 1000;
+}
+
+function updateRingProgress() {
+  const totalMs = Math.max(0, (state.phaseTotal || 0) * 1000);
+  const leftMs = phaseRemainingMs();
+  const frac = totalMs > 0 ? Math.min(1, leftMs / totalMs) : 0;
+  $('ring-fill').style.strokeDashoffset = RING_LEN * (1 - frac);
+}
+
+function startRingAnim() {
+  if (state.ringRaf) return;
+  const frame = () => {
+    state.ringRaf = requestAnimationFrame(frame);
+    if (!state.between && !$('ring-wrap').classList.contains('hidden')) {
+      updateRingProgress();
+    }
+  };
+  state.ringRaf = requestAnimationFrame(frame);
+}
+
+function stopRingAnim() {
+  if (!state.ringRaf) return;
+  cancelAnimationFrame(state.ringRaf);
+  state.ringRaf = 0;
+}
+
 function flash() {
   const f = $('flash');
   f.classList.remove('zap');
@@ -3552,16 +3726,18 @@ function flash() {
 
 function stopTimer() {
   if (state.timerId) { clearInterval(state.timerId); state.timerId = null; }
+  stopRingAnim();
 }
 
 function startTimer() {
   stopTimer();
+  startRingAnim();
   state.timerId = setInterval(onTick, 1000);
 }
 
 function completeExercise() {
   stopTimer();
-  gabbyPong.stop();
+  stopWorkoutSurprises();
   stopDemoVideo();
   setWorkoutMusic(null);
   renderReps('rest');
@@ -3580,10 +3756,15 @@ function reportProgress() {
 function startTimedExercise(ex) {
   const t = resolveTiming(ex);
   state.rep = 0;
-  state.gabbyRep = pickGabbyRep(t.reps);
+  {
+    const special = pickSpecialReps(t.reps);
+    state.gabbyRep = special.gabby;
+    state.graphicRep = special.graphic;
+  }
   state.phase = 'work';
   state.secondsLeft = t.workSeconds;
   state.phaseTotal = t.workSeconds;
+  armPhaseClock();
   $('ring-wrap').classList.remove('hidden');
   $('count-panel').classList.remove('active');
   $('rep-dots').classList.remove('hidden');
@@ -3597,7 +3778,7 @@ function startTimedExercise(ex) {
   playTimedPhaseVideo(ex, 'work');
   setWorkoutMusic('work');
   sounds.goBeep();
-  syncGabbyPong();
+  syncWorkoutSurprises();
   startTimer();
 }
 
@@ -3627,33 +3808,36 @@ function tickTimed() {
       state.phase = 'rest';
       state.secondsLeft = t.restSeconds;
       state.phaseTotal = t.restSeconds;
+      armPhaseClock();
       playTimedPhaseVideo(ex, 'rest');
       setWorkoutMusic('rest');
       sounds.restBeep();
       renderReps('rest');
       renderTimer('Rest', 'rest', 'var(--rest)');
-      syncGabbyPong();
+      syncWorkoutSurprises();
     } else {
       state.phase = 'work';
       state.secondsLeft = t.workSeconds;
       state.phaseTotal = t.workSeconds;
+      armPhaseClock();
       playTimedPhaseVideo(ex, 'work');
       setWorkoutMusic('work');
       sounds.goBeep();
       renderReps('work');
       renderTimer('Go!', 'go', 'var(--go)');
-      syncGabbyPong();
+      syncWorkoutSurprises();
     }
   } else {
     state.phase = 'work';
     state.secondsLeft = t.workSeconds;
     state.phaseTotal = t.workSeconds;
+    armPhaseClock();
     playTimedPhaseVideo(ex, 'work');
     setWorkoutMusic('work');
     sounds.goBeep();
     renderReps('work');
     renderTimer('Go!', 'go', 'var(--go)');
-    syncGabbyPong();
+    syncWorkoutSurprises();
   }
 }
 
@@ -3661,12 +3845,17 @@ function tickTimed() {
 function startDualExercise(ex) {
   const t = resolveTiming(ex);
   state.rep = 0;
-  state.gabbyRep = pickGabbyRep(t.reps);
+  {
+    const special = pickSpecialReps(t.reps);
+    state.gabbyRep = special.gabby;
+    state.graphicRep = special.graphic;
+  }
   state.phase = 'hold';
   state.phaseIndex = 0;
   const first = ex.phases[0];
   state.secondsLeft = first.seconds;
   state.phaseTotal = first.seconds;
+  armPhaseClock();
   $('ring-wrap').classList.remove('hidden');
   $('count-panel').classList.remove('active');
   $('rep-dots').classList.remove('hidden');
@@ -3680,7 +3869,7 @@ function startDualExercise(ex) {
   playDualPhaseVideo(ex);
   setWorkoutMusic('work');
   sounds.goBeep();
-  syncGabbyPong();
+  syncWorkoutSurprises();
   startTimer();
 }
 
@@ -3711,12 +3900,13 @@ function tickDual() {
     const first = ex.phases[0];
     state.secondsLeft = first.seconds;
     state.phaseTotal = first.seconds;
+    armPhaseClock();
     playDualPhaseVideo(ex);
     setWorkoutMusic('work');
     sounds.goBeep();
     renderReps('hold');
     renderDualPhase();
-    syncGabbyPong();
+    syncWorkoutSurprises();
     return;
   }
 
@@ -3726,6 +3916,7 @@ function tickDual() {
     const next = ex.phases[state.phaseIndex];
     state.secondsLeft = next.seconds;
     state.phaseTotal = next.seconds;
+    armPhaseClock();
     playDualPhaseVideo(ex);
     sounds.goBeep();
     renderDualPhase();
@@ -3744,24 +3935,26 @@ function tickDual() {
     state.phase = 'rest';
     state.secondsLeft = t.restSeconds;
     state.phaseTotal = t.restSeconds;
+    armPhaseClock();
     playDualPhaseVideo(ex);
     setWorkoutMusic('rest');
     sounds.restBeep();
     renderReps('rest');
     renderDualPhase();
-    syncGabbyPong();
+    syncWorkoutSurprises();
   } else {
     state.phase = 'hold';
     state.phaseIndex = 0;
     const first = ex.phases[0];
     state.secondsLeft = first.seconds;
     state.phaseTotal = first.seconds;
+    armPhaseClock();
     playDualPhaseVideo(ex);
     setWorkoutMusic('work');
     sounds.goBeep();
     renderReps('hold');
     renderDualPhase();
-    syncGabbyPong();
+    syncWorkoutSurprises();
   }
 }
 
@@ -3860,7 +4053,7 @@ function startBetween() {
   state.paused = false;
   state.betweenLeft = secs;
   music.paused = false;
-  gabbyPong.stop();
+  stopWorkoutSurprises();
   stopDemoVideo();
   setWorkoutMusic(null);
   playBetweenPreviewVideo(ex);
@@ -3902,7 +4095,7 @@ function endBetweenEarly() {
 }
 
 function celebrate() {
-  gabbyPong.stop();
+  stopWorkoutSurprises();
   setWorkoutMusic(null);
   let i;
   do { i = Math.floor(Math.random() * CELEBRATION_FX.length); } while (i === state.lastFxIndex && CELEBRATION_FX.length > 1);
@@ -3967,7 +4160,7 @@ function nextExercise() {
 function finishSession() {
   stopTimer();
   stopBetweenTimer();
-  gabbyPong.stop();
+  stopWorkoutSurprises();
   stopDemoVideo();
   stopBetweenVideo();
   state.between = false;
@@ -4151,13 +4344,21 @@ function togglePause() {
   state.paused = !state.paused;
   syncPauseButtons();
   if (state.paused) {
+    state.pauseRemainingMs = phaseRemainingMs();
+    state.phaseEndsAt = null;
     music.pause();
     pauseDemoVideo();
   } else {
+    const left = state.pauseRemainingMs != null
+      ? state.pauseRemainingMs
+      : Math.max(0, state.secondsLeft) * 1000;
+    state.phaseEndsAt = Date.now() + left;
+    state.pauseRemainingMs = null;
     music.resume();
     resumeDemoVideo();
     updateSessionEta(true);
   }
+  updateRingProgress();
 }
 
 $('btn-start').addEventListener('click', beginSession);
@@ -4199,7 +4400,7 @@ $('btn-skip').addEventListener('click', () => {
     syncPauseButtons();
   }
   stopTimer();
-  gabbyPong.stop();
+  stopWorkoutSurprises();
   stopDemoVideo();
   setWorkoutMusic(null);
   // skip current exercise → celebration path via next after celebrate, or jump
@@ -4215,6 +4416,11 @@ $('btn-restart').addEventListener('click', () => {
 /* ============================== load config ============================== */
 const BONUS_FOLDER = 'video/bonus videos';
 const BONUS_VIDEO_EXT = /\.(mov|mp4|webm|m4v)$/i;
+const REP_GRAPHICS_FOLDER = 'graphics/repititions';
+const REP_GRAPHICS_EXT = /\.(png|jpe?g|webp|gif|svg)$/i;
+
+/** Paths discovered from graphics/repititions (filenames never hard-coded). */
+let REPETITION_GRAPHICS = [];
 
 function probeVideoFile(url) {
   return new Promise((resolve) => {
@@ -4239,9 +4445,9 @@ function probeVideoFile(url) {
   });
 }
 
-async function loadBonusVideosFromDirectory() {
+async function loadPathsFromDirectory(folder, extRe) {
   try {
-    const res = await fetch(encodeURI(`${BONUS_FOLDER}/`), { cache: 'no-store' });
+    const res = await fetch(encodeURI(`${folder}/`), { cache: 'no-store' });
     if (!res.ok) return null;
     const text = await res.text();
     const ctype = (res.headers.get('content-type') || '').toLowerCase();
@@ -4249,7 +4455,7 @@ async function loadBonusVideosFromDirectory() {
       try {
         const data = JSON.parse(text);
         if (Array.isArray(data) && data.length) {
-          return data.map((f) => (String(f).includes('/') ? String(f) : `${BONUS_FOLDER}/${f}`));
+          return data.map((f) => (String(f).includes('/') ? String(f) : `${folder}/${f}`));
         }
       } catch (_) { /* not json listing */ }
     }
@@ -4262,16 +4468,20 @@ async function loadBonusVideosFromDirectory() {
       href = href.split('?')[0].split('#')[0];
       const base = href.replace(/\\/g, '/').split('/').pop();
       if (!base || base === '..' || base.startsWith('.')) continue;
-      if (!BONUS_VIDEO_EXT.test(base)) continue;
+      if (!extRe.test(base)) continue;
       names.add(base);
     }
     if (!names.size) return null;
     return [...names]
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-      .map((n) => `${BONUS_FOLDER}/${n}`);
+      .map((n) => `${folder}/${n}`);
   } catch (_) {
     return null;
   }
+}
+
+async function loadBonusVideosFromDirectory() {
+  return loadPathsFromDirectory(BONUS_FOLDER, BONUS_VIDEO_EXT);
 }
 
 async function loadBonusVideosByProbe() {
@@ -4301,6 +4511,16 @@ async function loadBonusVideos() {
   const probed = await loadBonusVideosByProbe();
   probed.forEach((p) => set.add(p));
 
+  return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+async function loadRepetitionGraphics() {
+  const set = new Set();
+  if (Array.isArray(window.REPETITION_GRAPHICS)) {
+    window.REPETITION_GRAPHICS.forEach((p) => set.add(p));
+  }
+  const fromDir = await loadPathsFromDirectory(REP_GRAPHICS_FOLDER, REP_GRAPHICS_EXT);
+  if (fromDir) fromDir.forEach((p) => set.add(p));
   return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
@@ -4601,6 +4821,7 @@ async function enterApp() {
   renderStartScreen();
   showScreen('start');
   CONFIG.bonusVideos = await loadBonusVideos();
+  REPETITION_GRAPHICS = await loadRepetitionGraphics();
 }
 
 // Coming back to the tab (or after midnight): refresh today's count so progress

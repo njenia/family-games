@@ -59,7 +59,9 @@ Defined in `supabase/migrations/0001_init.sql`:
 
 ## Maintenance
 
-`npm run sync` regenerates `bonus-videos.js` from the bonus video folder.
+`npm run sync` regenerates `bonus-videos.js` from the bonus video folder and
+`repetition-graphics.js` from `graphics/repititions/` (random bottom parade
+images on a special rep). Filenames are never hard-coded in app logic.
 New accounts are seeded from `exercises.json` (the single exercise-config source
 of truth) into each user's scheme in the database. `GET /api/scheme` also reloads
 that file so existing accounts stay in sync when the scheme changes.
