@@ -392,8 +392,37 @@
     color: rgba(255,255,255,0.9);
     z-index: 2;
     font-variant-numeric: tabular-nums;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.35em 0.5em;
   }
   #mini-game-meta strong { color: var(--accent); }
+  #mini-game-time-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+  }
+  #mini-game-ring {
+    width: 1.15em;
+    height: 1.15em;
+    flex-shrink: 0;
+    display: block;
+    transform: rotate(-90deg);
+  }
+  #mini-game-ring-track {
+    fill: none;
+    stroke: rgba(255,255,255,0.22);
+    stroke-width: 2.6;
+  }
+  #mini-game-ring-fill {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    will-change: stroke-dashoffset;
+  }
   #mini-game-stage {
     position: relative;
     flex: 1 1 auto;
@@ -1515,7 +1544,16 @@
 
 <div id="mini-game" aria-live="polite">
   <h2 id="mini-game-title">Catch Gabby!</h2>
-  <p id="mini-game-meta">Score <strong id="mini-game-score">0</strong> · <span id="mini-game-time">30</span>s left</p>
+  <p id="mini-game-meta">
+    Score <strong id="mini-game-score">0</strong> ·
+    <span id="mini-game-time-wrap">
+      <svg id="mini-game-ring" viewBox="0 0 20 20" aria-hidden="true">
+        <circle id="mini-game-ring-track" cx="10" cy="10" r="7.5"></circle>
+        <circle id="mini-game-ring-fill" cx="10" cy="10" r="7.5"></circle>
+      </svg>
+      <span><span id="mini-game-time">30</span>s left</span>
+    </span>
+  </p>
   <div id="mini-game-stage"></div>
   <p id="mini-game-result" hidden></p>
   <button class="big" id="mini-game-continue" type="button">All done!</button>
@@ -2711,6 +2749,8 @@ const catchGabby = {
   active: false,
   score: 0,
   secondsLeft: 30,
+  durationSec: 30,
+  endsAt: 0,
   raf: 0,
   tickId: 0,
   size: 88,
@@ -2835,7 +2875,9 @@ function startCatchGabbyMiniGame(onDone) {
   catchGabby.onDone = onDone || null;
   catchGabby.active = true;
   catchGabby.score = 0;
-  catchGabby.secondsLeft = 30;
+  catchGabby.durationSec = 30;
+  catchGabby.secondsLeft = catchGabby.durationSec;
+  catchGabby.endsAt = Date.now() + catchGabby.durationSec * 1000;
   catchGabby.size = Math.round(Math.min(110, Math.max(72, Math.min(W(), H()) * 0.16)));
 
   $('mini-game-score').textContent = '0';
@@ -2844,6 +2886,7 @@ function startCatchGabbyMiniGame(onDone) {
   $('mini-game-result').hidden = true;
   $('mini-game-continue').classList.remove('active');
   $('mini-game').classList.add('active');
+  updateMiniGameRing();
 
   // Spawn after layout so stage has size
   requestAnimationFrame(() => {
@@ -2861,6 +2904,17 @@ function startCatchGabbyMiniGame(onDone) {
   }, 1000);
 }
 
+function updateMiniGameRing() {
+  const fill = $('mini-game-ring-fill');
+  if (!fill) return;
+  const totalMs = Math.max(1, (catchGabby.durationSec || 30) * 1000);
+  const leftMs = catchGabby.active && catchGabby.endsAt
+    ? Math.max(0, catchGabby.endsAt - Date.now())
+    : Math.max(0, catchGabby.secondsLeft) * 1000;
+  const frac = Math.min(1, leftMs / totalMs);
+  fill.style.strokeDashoffset = MINI_RING_LEN * (1 - frac);
+}
+
 function drawCatchGabbys() {
   for (const a of catchGabby.actors) {
     a.el.style.transform = `translate(${a.x - a.size / 2}px, ${a.y - a.size / 2}px)`;
@@ -2870,6 +2924,7 @@ function drawCatchGabbys() {
 function catchGabbyLoop() {
   if (!catchGabby.active) return;
   catchGabby.raf = requestAnimationFrame(catchGabbyLoop);
+  updateMiniGameRing();
   if (catchGabby.secondsLeft <= 0) return;
 
   const stage = $('mini-game-stage');
@@ -2946,6 +3001,8 @@ function playCatchGabbyRecordCelebration() {
 async function finishCatchGabbyMiniGame() {
   if (!catchGabby.active) return;
   catchGabby.active = false;
+  catchGabby.endsAt = Date.now();
+  updateMiniGameRing();
   if (catchGabby.raf) {
     cancelAnimationFrame(catchGabby.raf);
     catchGabby.raf = 0;
@@ -3088,6 +3145,9 @@ $('ring-fill').style.strokeDasharray = RING_LEN;
 const ETA_RING_LEN = 2 * Math.PI * 7.5;
 $('eta-ring-fill').style.strokeDasharray = ETA_RING_LEN;
 $('eta-ring-fill').style.strokeDashoffset = 0;
+const MINI_RING_LEN = ETA_RING_LEN;
+$('mini-game-ring-fill').style.strokeDasharray = MINI_RING_LEN;
+$('mini-game-ring-fill').style.strokeDashoffset = 0;
 
 function currentExercise() {
   return EXERCISES[state.exercise];
