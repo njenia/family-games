@@ -6,6 +6,7 @@ window.REPETITION_GRAPHICS = [
   "graphics/repititions/cat3.png",
   "graphics/repititions/cat4.png",
   "graphics/repititions/panda1.png",
+  "graphics/repititions/sophie1.png",
   "graphics/repititions/strawberry1.png",
   "graphics/repititions/turtle1.png"
 ];
