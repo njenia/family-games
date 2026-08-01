@@ -1,14 +1,4 @@
 window.BONUS_VIDEOS = [
-  "video/bonus videos/bonus_1.mov",
-  "video/bonus videos/bonus_2.mov",
-  "video/bonus videos/bonus_3.mov",
-  "video/bonus videos/bonus_4.mov",
-  "video/bonus videos/bonus_5.mov",
-  "video/bonus videos/bonus_6.mov",
-  "video/bonus videos/bonus_7.mov",
-  "video/bonus videos/bonus_8.mov",
-  "video/bonus videos/bonus_9.mov",
-  "video/bonus videos/bonus_10.mov",
   "video/bonus videos/bonus_11.mov",
   "video/bonus videos/bonus_12.mov",
   "video/bonus videos/bonus_13.mov",
@@ -16,5 +6,6 @@ window.BONUS_VIDEOS = [
   "video/bonus videos/bonus_15.mov",
   "video/bonus videos/bonus_16.mov",
   "video/bonus videos/bonus_17.mov",
-  "video/bonus videos/bonus_18.mov"
+  "video/bonus videos/bonus_18.mov",
+  "video/bonus videos/bonus_19.mp4"
 ];

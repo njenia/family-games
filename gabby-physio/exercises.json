@@ -58,7 +58,7 @@
       "restSeconds": 0,
       "phases": [
         { "label": "Bend Stretch", "seconds": 30 },
-        { "label": "Rest", "seconds": 3 }
+        { "label": "Rest", "seconds": 5 }
       ]
     },
     {
@@ -70,7 +70,7 @@
       "mode": "timed",
       "reps": 4,
       "workSeconds": 30,
-      "restSeconds": 3,
+      "restSeconds": 5,
       "onlyDailySessions": [2, 4, 6]
     },
     {

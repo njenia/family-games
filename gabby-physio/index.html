@@ -1064,6 +1064,25 @@
     font-size: 0.95rem;
     color: rgba(255,255,255,0.85);
   }
+  .settings-toggle {
+    align-self: flex-start;
+    min-width: 88px;
+    min-height: var(--touch-min);
+    margin-top: 4px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(34, 197, 94, 0.28);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 800;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .settings-toggle[aria-pressed="false"] {
+    background: rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.8);
+  }
   #goal-row button {
     width: var(--touch-min);
     height: var(--touch-min);
@@ -1458,6 +1477,11 @@
         <button id="btn-goal-plus" type="button" aria-label="Increase daily goal">+</button>
       </div>
     </div>
+    <div class="settings-card">
+      <div class="section-label">Exercise preview</div>
+      <p class="settings-hint">Show the “up next” countdown and demo video before each exercise.</p>
+      <button type="button" class="settings-toggle" id="btn-toggle-preview" aria-pressed="true">On</button>
+    </div>
     <button class="ghost" id="btn-settings-back" type="button">Back</button>
   </section>
 
@@ -1580,8 +1604,15 @@ let EXERCISES = [];
 /* ============================== audio ============================== */
 let audioCtx = null;
 const SOUND_MUTE_KEY = 'gabby-physio-sound-muted';
+const SKIP_PREVIEW_KEY = 'gabby-physio-skip-exercise-preview';
 let soundMuted = false;
+let skipExercisePreview = false;
 try { soundMuted = localStorage.getItem(SOUND_MUTE_KEY) === '1'; } catch (_) {}
+try { skipExercisePreview = localStorage.getItem(SKIP_PREVIEW_KEY) === '1'; } catch (_) {}
+
+function betweenDelaySeconds() {
+  return skipExercisePreview ? 0 : (CONFIG.betweenSeconds ?? 8);
+}
 
 function ctx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -3244,7 +3275,7 @@ function remainingCurrentExerciseSeconds() {
 
 function remainingSessionSeconds() {
   if (!EXERCISES.length) return 0;
-  const between = CONFIG.betweenSeconds ?? 8;
+  const between = betweenDelaySeconds();
   const celeb = Math.round((CONFIG.celebrationMs || 8000) / 1000);
 
   if ($('celebration').classList.contains('active')) {
@@ -4186,7 +4217,21 @@ function renderBetween() {
 
 function startBetween() {
   const ex = currentExercise();
-  const secs = CONFIG.betweenSeconds ?? 8;
+  if (skipExercisePreview) {
+    stopBetweenTimer();
+    stopBetweenVideo();
+    stopWorkoutSurprises();
+    stopDemoVideo();
+    state.between = false;
+    state.paused = false;
+    state.betweenLeft = 0;
+    music.paused = false;
+    setWorkoutMusic(null);
+    updateProgressHighlight();
+    startExercise();
+    return;
+  }
+  const secs = betweenDelaySeconds();
   state.between = true;
   state.paused = false;
   state.betweenLeft = secs;
@@ -4431,7 +4476,7 @@ function beginSession() {
   syncMuteButtons();
   // Capture full-session estimate before the first between countdown starts draining.
   state.between = true;
-  state.betweenLeft = CONFIG.betweenSeconds ?? 8;
+  state.betweenLeft = betweenDelaySeconds();
   state.sessionTotalSec = Math.max(1, remainingSessionSeconds());
   showSessionEta();
   startEtaTicker();
@@ -4841,10 +4886,29 @@ async function changeGoal(delta) {
 }
 $('btn-goal-minus').addEventListener('click', () => changeGoal(-1));
 $('btn-goal-plus').addEventListener('click', () => changeGoal(1));
+$('btn-toggle-preview').addEventListener('click', toggleExercisePreview);
+
+function syncPreviewToggle() {
+  const btn = $('btn-toggle-preview');
+  if (!btn) return;
+  const on = !skipExercisePreview;
+  btn.textContent = on ? 'On' : 'Off';
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  btn.setAttribute('aria-label', on
+    ? 'Exercise preview is on. Tap to turn off.'
+    : 'Exercise preview is off. Tap to turn on.');
+}
+
+function toggleExercisePreview() {
+  skipExercisePreview = !skipExercisePreview;
+  try { localStorage.setItem(SKIP_PREVIEW_KEY, skipExercisePreview ? '1' : '0'); } catch (_) {}
+  syncPreviewToggle();
+}
 
 function showSettings() {
   if (!ME) return;
   $('goal-num').textContent = ME.user.dailyGoal;
+  syncPreviewToggle();
   showScreen('settings');
 }
 
