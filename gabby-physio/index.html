@@ -457,10 +457,40 @@
   .mini-gabby.pop {
     animation: mini-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
+  .mini-gabby.bonus {
+    border-color: #22d3ee;
+    box-shadow:
+      0 0 0 4px rgba(34, 211, 238, 0.4),
+      0 8px 24px rgba(0,0,0,0.35);
+  }
+  .mini-gabby.bonus img {
+    filter: hue-rotate(165deg) saturate(1.35) brightness(1.05);
+    animation: mini-bonus-pulse 0.75s ease-in-out infinite;
+  }
   @keyframes mini-pop {
     0%   { transform: scale(1); }
     40%  { transform: scale(1.35); }
     100% { transform: scale(1); }
+  }
+  @keyframes mini-bonus-pulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.1); }
+  }
+  #mini-game-time-bonus {
+    color: #22d3ee;
+    font-weight: 800;
+    margin-left: 0.25em;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+  #mini-game-time-bonus.show {
+    opacity: 1;
+    animation: mini-bonus-pop 0.9s ease-out;
+  }
+  @keyframes mini-bonus-pop {
+    0%   { transform: translateY(4px) scale(0.8); opacity: 0; }
+    20%  { transform: translateY(0) scale(1.15); opacity: 1; }
+    100% { transform: translateY(-6px) scale(1); opacity: 0; }
   }
   #mini-game-result {
     z-index: 2;
@@ -1575,7 +1605,7 @@
         <circle id="mini-game-ring-track" cx="10" cy="10" r="7.5"></circle>
         <circle id="mini-game-ring-fill" cx="10" cy="10" r="7.5"></circle>
       </svg>
-      <span><span id="mini-game-time">30</span>s left</span>
+      <span><span id="mini-game-time">30</span>s left<span id="mini-game-time-bonus" aria-live="polite"></span></span>
     </span>
   </p>
   <div id="mini-game-stage"></div>
@@ -1697,6 +1727,7 @@ const STRONG_TRACKS = [
   'audio/strong1.m4a',
   'audio/strong2.m4a',
   'audio/strong3.m4a',
+  'audio/strong4.m4a',
 ];
 const REST_TRACK = 'audio/rest.m4a';
 
@@ -2784,6 +2815,8 @@ const catchGabby = {
   endsAt: 0,
   raf: 0,
   tickId: 0,
+  bonusTimerId: 0,
+  bonusExpireId: 0,
   size: 88,
   actors: [],
   onDone: null,
@@ -2831,10 +2864,33 @@ async function syncCatchGabbyHighScore() {
   }
 }
 
-function clearCatchGabbyActors() {
-  catchGabby.actors = [];
+function clearCatchGabbyActors({ keepBonus = false } = {}) {
   const stage = $('mini-game-stage');
-  if (stage) stage.innerHTML = '';
+  if (!stage) {
+    catchGabby.actors = [];
+    return;
+  }
+  if (!keepBonus) {
+    catchGabby.actors = [];
+    stage.innerHTML = '';
+    return;
+  }
+  const keep = catchGabby.actors.filter((a) => a.bonus);
+  catchGabby.actors = keep;
+  [...stage.children].forEach((child) => {
+    if (!keep.some((a) => a.el === child)) child.remove();
+  });
+}
+
+function clearCatchGabbyBonusTimers() {
+  if (catchGabby.bonusTimerId) {
+    clearTimeout(catchGabby.bonusTimerId);
+    catchGabby.bonusTimerId = 0;
+  }
+  if (catchGabby.bonusExpireId) {
+    clearTimeout(catchGabby.bonusExpireId);
+    catchGabby.bonusExpireId = 0;
+  }
 }
 
 function stopCatchGabbyMiniGame(silent = false) {
@@ -2847,7 +2903,13 @@ function stopCatchGabbyMiniGame(silent = false) {
     clearInterval(catchGabby.tickId);
     catchGabby.tickId = 0;
   }
+  clearCatchGabbyBonusTimers();
   clearCatchGabbyActors();
+  const bonusLabel = $('mini-game-time-bonus');
+  if (bonusLabel) {
+    bonusLabel.textContent = '';
+    bonusLabel.classList.remove('show');
+  }
   $('mini-game').classList.remove('active');
   $('mini-game-result').hidden = true;
   $('mini-game-continue').classList.remove('active');
@@ -2860,11 +2922,11 @@ function stopCatchGabbyMiniGame(silent = false) {
   }
 }
 
-function createCatchGabbyActor(stage, sw, sh, size) {
+function createCatchGabbyActor(stage, sw, sh, size, { bonus = false } = {}) {
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'mini-gabby';
-  btn.setAttribute('aria-label', 'Catch Gabby');
+  btn.className = bonus ? 'mini-gabby bonus' : 'mini-gabby';
+  btn.setAttribute('aria-label', bonus ? 'Catch bonus Gabby for more time' : 'Catch Gabby');
   btn.style.width = size + 'px';
   btn.style.height = size + 'px';
   const img = document.createElement('img');
@@ -2874,16 +2936,91 @@ function createCatchGabbyActor(stage, sw, sh, size) {
   stage.appendChild(btn);
 
   const r = size / 2;
-  const speed = rand(1.9, 3.2);
+  const speed = bonus ? rand(2.6, 4.2) : rand(1.9, 3.2);
   const angle = rand(0.4, Math.PI * 2 - 0.4);
   return {
     el: btn,
     size,
+    bonus,
     x: rand(r, Math.max(r + 1, sw - r)),
     y: rand(r, Math.max(r + 1, sh - r)),
     vx: Math.cos(angle) * speed,
     vy: Math.sin(angle) * speed,
   };
+}
+
+function hasBonusGabby() {
+  return catchGabby.actors.some((a) => a.bonus);
+}
+
+function removeBonusGabbys() {
+  const stage = $('mini-game-stage');
+  catchGabby.actors = catchGabby.actors.filter((a) => {
+    if (!a.bonus) return true;
+    if (stage && a.el.parentNode === stage) a.el.remove();
+    return false;
+  });
+  if (catchGabby.bonusExpireId) {
+    clearTimeout(catchGabby.bonusExpireId);
+    catchGabby.bonusExpireId = 0;
+  }
+}
+
+function spawnBonusGabby() {
+  if (!catchGabby.active || catchGabby.secondsLeft <= 0) return;
+  if (hasBonusGabby()) return;
+  const stage = $('mini-game-stage');
+  if (!stage) return;
+  const sw = stage.clientWidth || W();
+  const sh = stage.clientHeight || Math.max(220, H() * 0.45);
+  const size = Math.round(catchGabby.size * rand(0.9, 1.05));
+  catchGabby.actors.push(createCatchGabbyActor(stage, sw, sh, size, { bonus: true }));
+  drawCatchGabbys();
+  if (catchGabby.bonusExpireId) clearTimeout(catchGabby.bonusExpireId);
+  // Vanish if not caught — keeps the bonus rare and urgent
+  catchGabby.bonusExpireId = setTimeout(() => {
+    catchGabby.bonusExpireId = 0;
+    if (!catchGabby.active) return;
+    removeBonusGabbys();
+  }, rand(3800, 5200));
+}
+
+function scheduleBonusGabby() {
+  if (catchGabby.bonusTimerId) {
+    clearTimeout(catchGabby.bonusTimerId);
+    catchGabby.bonusTimerId = 0;
+  }
+  if (!catchGabby.active) return;
+  catchGabby.bonusTimerId = setTimeout(() => {
+    catchGabby.bonusTimerId = 0;
+    if (!catchGabby.active || catchGabby.secondsLeft <= 0) return;
+    spawnBonusGabby();
+    scheduleBonusGabby();
+  }, rand(3200, 7000));
+}
+
+function syncCatchGabbyClock() {
+  const left = Math.max(0, Math.ceil((catchGabby.endsAt - Date.now()) / 1000));
+  catchGabby.secondsLeft = left;
+  $('mini-game-time').textContent = String(left);
+  updateMiniGameRing();
+  return left;
+}
+
+function showMiniGameTimeBonus(sec) {
+  const el = $('mini-game-time-bonus');
+  if (!el) return;
+  el.textContent = `+${sec}s`;
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+}
+
+function addCatchGabbyBonusTime(sec = 5) {
+  catchGabby.endsAt += sec * 1000;
+  catchGabby.durationSec += sec;
+  syncCatchGabbyClock();
+  showMiniGameTimeBonus(sec);
 }
 
 /** Fresh wave of 1–3 floating Gabbys (used at start and after every catch). */
@@ -2893,7 +3030,7 @@ function spawnCatchGabbyWave() {
   const sw = stage.clientWidth || W();
   const sh = stage.clientHeight || Math.max(220, H() * 0.45);
   const count = 1 + Math.floor(Math.random() * 3); // 1, 2, or 3
-  clearCatchGabbyActors();
+  clearCatchGabbyActors({ keepBonus: true });
   for (let i = 0; i < count; i++) {
     const size = Math.round(catchGabby.size * (count === 1 ? 1 : rand(0.82, 1)));
     catchGabby.actors.push(createCatchGabbyActor(stage, sw, sh, size));
@@ -2924,15 +3061,14 @@ function startCatchGabbyMiniGame(onDone) {
     if (!catchGabby.active) return;
     spawnCatchGabbyWave();
     catchGabbyLoop();
+    scheduleBonusGabby();
   });
 
   if (!soundMuted) sounds.goBeep();
   catchGabby.tickId = setInterval(() => {
     if (!catchGabby.active) return;
-    catchGabby.secondsLeft -= 1;
-    $('mini-game-time').textContent = String(Math.max(0, catchGabby.secondsLeft));
-    if (catchGabby.secondsLeft <= 0) finishCatchGabbyMiniGame();
-  }, 1000);
+    if (syncCatchGabbyClock() <= 0) finishCatchGabbyMiniGame();
+  }, 250);
 }
 
 function updateMiniGameRing() {
@@ -2995,8 +3131,23 @@ function onCatchGabbyTap(e) {
   const actor = catchGabby.actors.find((a) => a.el === btn);
   if (!actor) return;
 
+  const wasBonus = !!actor.bonus;
   catchGabby.score += 1;
   $('mini-game-score').textContent = String(catchGabby.score);
+
+  if (wasBonus) {
+    // Remove only the bonus Gabby; keep the current wave on stage
+    catchGabby.actors = catchGabby.actors.filter((a) => a !== actor);
+    if (actor.el && actor.el.parentNode) actor.el.remove();
+    if (catchGabby.bonusExpireId) {
+      clearTimeout(catchGabby.bonusExpireId);
+      catchGabby.bonusExpireId = 0;
+    }
+    addCatchGabbyBonusTime(5);
+    if (!soundMuted) sounds.cheer();
+    flash();
+    return;
+  }
 
   if (!soundMuted) {
     if (catchGabby.score % 5 === 0) sounds.cheer();
@@ -3004,7 +3155,7 @@ function onCatchGabbyTap(e) {
   }
   flash();
 
-  // New 1–3 Gabbys after every catch
+  // New 1–3 Gabbys after every normal catch (bonus Gabby stays if present)
   spawnCatchGabbyWave();
 }
 
@@ -3042,6 +3193,7 @@ async function finishCatchGabbyMiniGame() {
     clearInterval(catchGabby.tickId);
     catchGabby.tickId = 0;
   }
+  clearCatchGabbyBonusTimers();
 
   const n = catchGabby.score;
   const prevBest = effectiveCatchHighScore();
