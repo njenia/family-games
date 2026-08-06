@@ -1113,6 +1113,30 @@
     background: rgba(255,255,255,0.12);
     color: rgba(255,255,255,0.8);
   }
+  .settings-choice-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 4px;
+  }
+  .settings-choice {
+    min-width: 0;
+    flex: 1 1 auto;
+    min-height: var(--touch-min);
+    padding: 10px 16px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.8);
+    font-size: 0.95rem;
+    font-weight: 800;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .settings-choice[aria-pressed="true"] {
+    background: rgba(34, 197, 94, 0.28);
+    color: #fff;
+  }
   #goal-row button {
     width: var(--touch-min);
     height: var(--touch-min);
@@ -1512,6 +1536,14 @@
       <p class="settings-hint">Show the “up next” countdown and demo video before each exercise.</p>
       <button type="button" class="settings-toggle" id="btn-toggle-preview" aria-pressed="true">On</button>
     </div>
+    <div class="settings-card">
+      <div class="section-label">Bonus videos</div>
+      <p class="settings-hint">Clips shown between exercises after you finish a set.</p>
+      <div class="settings-choice-row" role="group" aria-label="Bonus video source">
+        <button type="button" class="settings-choice" id="btn-bonus-custom" aria-pressed="true">Custom</button>
+        <button type="button" class="settings-choice" id="btn-bonus-raccoon" aria-pressed="false">Raccoons</button>
+      </div>
+    </div>
     <button class="ghost" id="btn-settings-back" type="button">Back</button>
   </section>
 
@@ -1591,7 +1623,7 @@
   <h2 id="celebration-title">Amazing!</h2>
   <img id="face-celebrate" class="gabby-face" src="gabby.png" alt="Gabby">
   <div id="dance-row"></div>
-  <video id="bonus-video" playsinline muted></video>
+  <video id="bonus-video" playsinline></video>
   <p id="celebration-sub">Get ready for the next one…</p>
   <button class="big" id="btn-celebration-next" type="button">Next exercise</button>
 </div>
@@ -1635,10 +1667,18 @@ let EXERCISES = [];
 let audioCtx = null;
 const SOUND_MUTE_KEY = 'gabby-physio-sound-muted';
 const SKIP_PREVIEW_KEY = 'gabby-physio-skip-exercise-preview';
+const BONUS_VIDEO_SOURCE_KEY = 'gabby-physio-bonus-video-source';
+const RACCOON_VID_URL = 'https://api.mapach.es/v1/vid';
 let soundMuted = false;
 let skipExercisePreview = false;
+/** @type {'custom' | 'raccoon'} */
+let bonusVideoSource = 'custom';
 try { soundMuted = localStorage.getItem(SOUND_MUTE_KEY) === '1'; } catch (_) {}
 try { skipExercisePreview = localStorage.getItem(SKIP_PREVIEW_KEY) === '1'; } catch (_) {}
+try {
+  const src = localStorage.getItem(BONUS_VIDEO_SOURCE_KEY);
+  if (src === 'raccoon' || src === 'custom') bonusVideoSource = src;
+} catch (_) {}
 
 function betweenDelaySeconds() {
   return skipExercisePreview ? 0 : (CONFIG.betweenSeconds ?? 8);
@@ -3724,32 +3764,15 @@ function stopBonusVideo() {
   v.onended = null;
 }
 
-/** Play a random bonus clip once. Resolves when it ends (or immediately if none). */
-async function playBonusVideoOnce() {
-  let list = (CONFIG && CONFIG.bonusVideos && CONFIG.bonusVideos.length)
-    ? CONFIG.bonusVideos
-    : [];
-  if (!list.length) {
-    list = await loadBonusVideos();
-    if (CONFIG) CONFIG.bonusVideos = list;
-  }
+function playBonusSrcOnce(src, { encode = true } = {}) {
   return new Promise((resolve) => {
-    if (!list.length) {
-      console.warn('No bonus videos found in', BONUS_FOLDER);
-      stopBonusVideo();
-      resolve();
-      return;
-    }
-    let i;
-    do { i = Math.floor(Math.random() * list.length); } while (i === state.lastBonusIndex && list.length > 1);
-    state.lastBonusIndex = i;
-    const src = list[i];
     const v = $('bonus-video');
     v.classList.add('active');
     v.dataset.path = src;
-    v.src = encodeURI(src);
+    v.src = encode ? encodeURI(src) : src;
     v.loop = false;
-    v.muted = true;
+    v.muted = false;
+    v.volume = 1;
     try { v.currentTime = 0; } catch (_) {}
 
     const done = () => {
@@ -3762,10 +3785,41 @@ async function playBonusVideoOnce() {
       console.warn('Bonus video failed to play:', src);
       done();
     };
-    const play = () => v.play().catch(done);
+    const play = () => {
+      // Prefer unmuted autoplay; if the browser blocks it, fall back to muted so the clip still plays.
+      v.play().catch(() => {
+        v.muted = true;
+        return v.play().catch(done);
+      });
+    };
     if (v.readyState >= 2) play();
     else v.addEventListener('loadeddata', play, { once: true });
   });
+}
+
+/** Play a random bonus clip once. Resolves when it ends (or immediately if none). */
+async function playBonusVideoOnce() {
+  if (bonusVideoSource === 'raccoon') {
+    // Cache-bust so each celebration fetches a fresh random clip from the API.
+    return playBonusSrcOnce(`${RACCOON_VID_URL}?t=${Date.now()}`, { encode: false });
+  }
+
+  let list = (CONFIG && CONFIG.bonusVideos && CONFIG.bonusVideos.length)
+    ? CONFIG.bonusVideos
+    : [];
+  if (!list.length) {
+    list = await loadBonusVideos();
+    if (CONFIG) CONFIG.bonusVideos = list;
+  }
+  if (!list.length) {
+    console.warn('No bonus videos found in', BONUS_FOLDER);
+    stopBonusVideo();
+    return;
+  }
+  let i;
+  do { i = Math.floor(Math.random() * list.length); } while (i === state.lastBonusIndex && list.length > 1);
+  state.lastBonusIndex = i;
+  return playBonusSrcOnce(list[i]);
 }
 
 /* ============================== state ============================== */
@@ -5039,6 +5093,8 @@ async function changeGoal(delta) {
 $('btn-goal-minus').addEventListener('click', () => changeGoal(-1));
 $('btn-goal-plus').addEventListener('click', () => changeGoal(1));
 $('btn-toggle-preview').addEventListener('click', toggleExercisePreview);
+$('btn-bonus-custom').addEventListener('click', () => setBonusVideoSource('custom'));
+$('btn-bonus-raccoon').addEventListener('click', () => setBonusVideoSource('raccoon'));
 
 function syncPreviewToggle() {
   const btn = $('btn-toggle-preview');
@@ -5057,10 +5113,27 @@ function toggleExercisePreview() {
   syncPreviewToggle();
 }
 
+function syncBonusVideoSourceChoice() {
+  const custom = $('btn-bonus-custom');
+  const raccoon = $('btn-bonus-raccoon');
+  if (!custom || !raccoon) return;
+  const isRaccoon = bonusVideoSource === 'raccoon';
+  custom.setAttribute('aria-pressed', isRaccoon ? 'false' : 'true');
+  raccoon.setAttribute('aria-pressed', isRaccoon ? 'true' : 'false');
+}
+
+function setBonusVideoSource(source) {
+  if (source !== 'custom' && source !== 'raccoon') return;
+  bonusVideoSource = source;
+  try { localStorage.setItem(BONUS_VIDEO_SOURCE_KEY, bonusVideoSource); } catch (_) {}
+  syncBonusVideoSourceChoice();
+}
+
 function showSettings() {
   if (!ME) return;
   $('goal-num').textContent = ME.user.dailyGoal;
   syncPreviewToggle();
+  syncBonusVideoSourceChoice();
   showScreen('settings');
 }
 
