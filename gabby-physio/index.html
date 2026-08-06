@@ -718,6 +718,7 @@
   #app-title {
     min-width: 0;
     flex: 1 1 auto;
+    font: inherit;
     font-size: clamp(0.95rem, 3.6vw, 1.15rem);
     font-weight: 800;
     letter-spacing: 0.3px;
@@ -728,6 +729,16 @@
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1.2;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 8px;
+  }
+  #app-title:hover { filter: brightness(1.08); }
+  #app-title:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
   }
 
   #topbar-right {
@@ -758,6 +769,15 @@
   }
   .topbar-link:hover { background: rgba(255,255,255,0.2); }
   .topbar-link:active { background: rgba(255,255,255,0.28); }
+  #btn-resume-session {
+    display: none;
+    align-items: center;
+    background: var(--go);
+    border-color: #22c55e;
+    color: #14532d;
+  }
+  #btn-resume-session:hover { background: #86efac; }
+  #btn-resume-session.visible { display: inline-flex; }
 
   #user-chip {
     display: flex;
@@ -1258,7 +1278,6 @@
   #history-empty { padding: 24px; color: rgba(255,255,255,0.7); text-align: center; }
 
   #screen-finish .stars-row { justify-content: center; }
-  #screen-settings > .ghost { align-self: flex-start; }
 
   input, textarea {
     -webkit-user-select: text;
@@ -1449,9 +1468,10 @@
 <img id="rep-parade" alt="">
 
 <header id="topbar">
-  <div id="app-title">Gabby's Physio Adventure</div>
+  <button type="button" id="app-title" aria-label="Go to home">Gabby's Physio Adventure</button>
   <div id="topbar-right">
     <nav id="topbar-nav" aria-label="Account">
+      <button class="topbar-link" id="btn-resume-session" type="button" aria-label="Resume session">▶ Resume</button>
       <button class="topbar-link" id="btn-history" type="button">Sessions</button>
       <button class="topbar-link" id="btn-settings" type="button">Settings</button>
     </nav>
@@ -1551,7 +1571,6 @@
         <button type="button" class="settings-choice" id="btn-bonus-raccoon" aria-pressed="false">Raccoons</button>
       </div>
     </div>
-    <button class="ghost" id="btn-settings-back" type="button">Back</button>
   </section>
 
   <section id="screen-history" class="screen">
@@ -3927,6 +3946,9 @@ const state = {
   graphicRep: -1,
   // server session tracking
   sessionId: null,
+  sessionLive: false,
+  resumeTarget: null, // 'workout' | 'between' | 'celebration' when away mid-session
+  celebrationPausedLeftMs: null,
   exercisesDone: 0,
   // session ETA
   finishAtMs: null,
@@ -4630,6 +4652,10 @@ function finishSession() {
   stopDemoVideo();
   stopBetweenVideo();
   state.between = false;
+  state.sessionLive = false;
+  state.resumeTarget = null;
+  state.celebrationPausedLeftMs = null;
+  syncResumeButton();
   setWorkoutMusic(null);
   hideSessionEta();
   clearDailyGoalCelebration();
@@ -4746,11 +4772,15 @@ function beginSession() {
   state.paused = false;
   state.exercisesDone = 0;
   state.sessionId = null;
+  state.sessionLive = true;
+  state.resumeTarget = null;
+  state.celebrationPausedLeftMs = null;
   state.sessionTotalSec = 0;
   state.etaFrozenLeftMs = null;
   music.paused = false;
   stopBetweenTimer();
   stopDemoVideo();
+  syncResumeButton();
   startKeepingScreenAwake();
   api('POST', '/api/sessions', { localDate: localDateStr(), exercisesTotal: EXERCISES.length })
     .then((data) => { state.sessionId = data.id; })
@@ -4775,6 +4805,14 @@ function syncPauseButtons() {
   $('between-count').classList.toggle('pulse', state.paused && state.between);
 }
 
+function syncResumeButton() {
+  const btn = $('btn-resume-session');
+  if (!btn) return;
+  const show = state.sessionLive && !!state.resumeTarget;
+  btn.classList.toggle('visible', show);
+  btn.hidden = !show;
+}
+
 function syncMuteButtons() {
   const label = soundMuted ? 'Unmute' : 'Mute';
   const pressed = soundMuted ? 'true' : 'false';
@@ -4794,10 +4832,16 @@ function toggleSoundMute() {
   syncMuteButtons();
 }
 
-function togglePause() {
+/** Pause or unpause the live workout / between countdown (not celebration). */
+function setSessionPaused(wantPaused) {
   if ($('celebration').classList.contains('active')) return;
+  wantPaused = !!wantPaused;
   if (state.between) {
-    state.paused = !state.paused;
+    if (wantPaused === !!state.paused) {
+      syncPauseButtons();
+      return;
+    }
+    state.paused = wantPaused;
     syncPauseButtons();
     if (state.paused) {
       state.etaFrozenLeftMs = sessionEtaRemainingMs();
@@ -4813,23 +4857,34 @@ function togglePause() {
     updateEtaRing();
     return;
   }
-  if (!screens.workout.classList.contains('active')) return;
+
+  const onWorkout = screens.workout.classList.contains('active');
+  if (!onWorkout && state.resumeTarget !== 'workout') return;
+
   const ex = currentExercise();
-  if (ex && ex.mode === 'count') return;
-  state.paused = !state.paused;
+  const isCount = ex && ex.mode === 'count';
+  if (wantPaused === !!state.paused) {
+    syncPauseButtons();
+    return;
+  }
+  state.paused = wantPaused;
   syncPauseButtons();
   if (state.paused) {
-    state.pauseRemainingMs = phaseRemainingMs();
-    state.phaseEndsAt = null;
+    if (!isCount) {
+      state.pauseRemainingMs = phaseRemainingMs();
+      state.phaseEndsAt = null;
+    }
     state.etaFrozenLeftMs = sessionEtaRemainingMs();
     music.pause();
     pauseDemoVideo();
   } else {
-    const left = state.pauseRemainingMs != null
-      ? state.pauseRemainingMs
-      : Math.max(0, state.secondsLeft) * 1000;
-    state.phaseEndsAt = Date.now() + left;
-    state.pauseRemainingMs = null;
+    if (!isCount) {
+      const left = state.pauseRemainingMs != null
+        ? state.pauseRemainingMs
+        : Math.max(0, state.secondsLeft) * 1000;
+      state.phaseEndsAt = Date.now() + left;
+      state.pauseRemainingMs = null;
+    }
     state.etaFrozenLeftMs = null;
     music.resume();
     resumeDemoVideo();
@@ -4837,6 +4892,158 @@ function togglePause() {
   }
   updateRingProgress();
   updateEtaRing();
+}
+
+function togglePause() {
+  if ($('celebration').classList.contains('active')) return;
+  if (state.between) {
+    setSessionPaused(!state.paused);
+    return;
+  }
+  if (!screens.workout.classList.contains('active')) return;
+  const ex = currentExercise();
+  if (ex && ex.mode === 'count') return;
+  setSessionPaused(!state.paused);
+}
+
+function suspendCelebration() {
+  if (!$('celebration').classList.contains('active')) return;
+  state.etaFrozenLeftMs = sessionEtaRemainingMs();
+  if (state.celebrationTimerId) {
+    clearTimeout(state.celebrationTimerId);
+    state.celebrationTimerId = null;
+  }
+  if (state.celebrationEndsAt != null) {
+    state.celebrationPausedLeftMs = Math.max(0, state.celebrationEndsAt - Date.now());
+  } else {
+    state.celebrationPausedLeftMs = state.celebrationPausedLeftMs ?? 0;
+  }
+  state.celebrationEndsAt = null;
+  const bv = $('bonus-video');
+  if (bv) bv.pause();
+  $('celebration').classList.remove('active');
+  particles = [];
+  fxRunning = false;
+  if (fx) fx.clearRect(0, 0, W(), H());
+  updateEtaRing();
+}
+
+function restoreCelebration() {
+  showScreen('workout');
+  $('celebration').classList.add('active');
+  const left = Math.max(0, state.celebrationPausedLeftMs ?? 0);
+  state.celebrationPausedLeftMs = null;
+  state.etaFrozenLeftMs = null;
+  if (left <= 0) {
+    endCelebration();
+    return;
+  }
+  state.celebrationEndsAt = Date.now() + left;
+  updateSessionEta(true);
+  const bv = $('bonus-video');
+  if (bv && bv.classList.contains('active') && !bv.ended) {
+    bv.play().catch(() => {});
+  }
+  state.celebrationTimerId = setTimeout(() => {
+    endCelebration();
+  }, left);
+}
+
+/** Pause a live session when navigating to home / settings / history. */
+function leaveSessionScreen() {
+  if (!state.sessionLive) {
+    syncResumeButton();
+    return;
+  }
+  if (!state.resumeTarget) {
+    if ($('celebration').classList.contains('active')) {
+      suspendCelebration();
+      state.resumeTarget = 'celebration';
+    } else if (state.between || screens.between.classList.contains('active')) {
+      state.resumeTarget = 'between';
+      if (!state.paused) {
+        state.paused = true;
+        syncPauseButtons();
+        state.etaFrozenLeftMs = sessionEtaRemainingMs();
+        music.pause();
+        $('between-video').pause();
+        updateEtaRing();
+      }
+    } else {
+      state.resumeTarget = 'workout';
+      if (!state.paused) {
+        const ex = currentExercise();
+        state.paused = true;
+        syncPauseButtons();
+        if (!(ex && ex.mode === 'count')) {
+          state.pauseRemainingMs = phaseRemainingMs();
+          state.phaseEndsAt = null;
+        }
+        state.etaFrozenLeftMs = sessionEtaRemainingMs();
+        music.pause();
+        pauseDemoVideo();
+        updateRingProgress();
+        updateEtaRing();
+      }
+    }
+  } else if (!state.paused && state.resumeTarget !== 'celebration') {
+    state.paused = true;
+    syncPauseButtons();
+    music.pause();
+  }
+  syncResumeButton();
+}
+
+function resumeSessionFromTopbar() {
+  if (!state.sessionLive || !state.resumeTarget) return;
+  const target = state.resumeTarget;
+  state.resumeTarget = null;
+  syncResumeButton();
+
+  if (target === 'celebration') {
+    restoreCelebration();
+    return;
+  }
+  if (target === 'between') {
+    showScreen('between');
+    if (state.paused) {
+      state.paused = false;
+      syncPauseButtons();
+      state.etaFrozenLeftMs = null;
+      music.resume();
+      const v = $('between-video');
+      if (v.classList.contains('active')) v.play().catch(() => {});
+      updateSessionEta(true);
+      updateEtaRing();
+    }
+    return;
+  }
+  showScreen('workout');
+  if (state.paused) {
+    const ex = currentExercise();
+    state.paused = false;
+    syncPauseButtons();
+    if (!(ex && ex.mode === 'count')) {
+      const left = state.pauseRemainingMs != null
+        ? state.pauseRemainingMs
+        : Math.max(0, state.secondsLeft) * 1000;
+      state.phaseEndsAt = Date.now() + left;
+      state.pauseRemainingMs = null;
+    }
+    state.etaFrozenLeftMs = null;
+    music.resume();
+    resumeDemoVideo();
+    updateSessionEta(true);
+    updateRingProgress();
+    updateEtaRing();
+  }
+}
+
+function goHome() {
+  leaveSessionScreen();
+  renderStartScreen();
+  showScreen('start');
+  if (!state.sessionLive) refreshMe();
 }
 
 $('btn-start').addEventListener('click', beginSession);
@@ -5042,6 +5249,12 @@ function setAuthMode(mode) {
 
 function showAuth() {
   ME = null;
+  state.sessionLive = false;
+  state.resumeTarget = null;
+  state.celebrationPausedLeftMs = null;
+  state.sessionId = null;
+  state.paused = false;
+  syncResumeButton();
   $('topbar').classList.remove('active');
   hideSessionEta();
   stopKeepingScreenAwake();
@@ -5227,6 +5440,7 @@ async function setBonusVideoSource(source) {
 
 function showSettings() {
   if (!ME) return;
+  leaveSessionScreen();
   $('goal-num').textContent = ME.user.dailyGoal;
   applyUserSettings(ME.user);
   showScreen('settings');
@@ -5286,6 +5500,7 @@ function friendlyDate(iso) {
 }
 
 async function showHistory() {
+  leaveSessionScreen();
   try {
     const data = await api('GET', '/api/sessions?limit=365');
     const goal = data.goal;
@@ -5331,13 +5546,18 @@ async function refreshMe() {
 }
 
 $('btn-history').addEventListener('click', showHistory);
-$('btn-history-back').addEventListener('click', () => { renderStartScreen(); showScreen('start'); refreshMe(); });
+$('btn-history-back').addEventListener('click', goHome);
 $('btn-settings').addEventListener('click', showSettings);
-$('btn-settings-back').addEventListener('click', () => { renderStartScreen(); showScreen('start'); refreshMe(); });
+$('app-title').addEventListener('click', goHome);
+$('btn-resume-session').addEventListener('click', resumeSessionFromTopbar);
 $('btn-finish-home').addEventListener('click', () => {
   clearDailyGoalCelebration();
   particles = [];
   stopKeepingScreenAwake();
+  state.sessionLive = false;
+  state.resumeTarget = null;
+  state.celebrationPausedLeftMs = null;
+  syncResumeButton();
   renderStartScreen();
   showScreen('start');
   refreshMe();
