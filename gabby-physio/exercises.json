@@ -11,22 +11,8 @@
     {
       "id": "wrist-bend",
       "name": "Wrist Bend",
-      "hint": "Press your wrist down and hold, then press up and hold. That is one rep.",
+      "hint": "Press your wrist up and hold. Relax between reps.",
       "emoji": "↕️",
-      "picture": null,
-      "mode": "dual",
-      "reps": 10,
-      "restSeconds": 0,
-      "phases": [
-        { "label": "Press Down", "seconds": 5 },
-        { "label": "Press Up", "seconds": 5 }
-      ]
-    },
-    {
-      "id": "forarm-rotate",
-      "name": "Forearm Rotate",
-      "hint": "Start with thumb facing up. Turn your palm toward the outside so knuckles and wrist stay flat on the table. Hold, then repeat.",
-      "emoji": "🔄",
       "picture": null,
       "mode": "timed",
       "reps": 10,
@@ -34,17 +20,31 @@
       "restSeconds": 3
     },
     {
-      "id": "elbow-bending",
-      "name": "Elbow Bending",
-      "hint": "Hold forearm folded up to your shoulder, then hold it stretched down fully open. That is one rep.",
-      "emoji": "💪",
+      "id": "compound-elbow-manouvare",
+      "name": "Compound Elbow Manoeuvre",
+      "hint": "Forearm rotate, then hold elbow up, then hold elbow down. That is one rep. Rest after all three.",
+      "emoji": "🔄",
       "picture": null,
       "mode": "dual",
       "reps": 10,
-      "restSeconds": 0,
+      "restSeconds": 3,
+      "restVideo": "video/forarm-rotate rest.mov",
       "phases": [
-        { "label": "Hold Up", "seconds": 5 },
-        { "label": "Hold Down", "seconds": 5 }
+        {
+          "label": "Forearm Rotate",
+          "seconds": 6,
+          "video": "video/forarm-rotate work.mov"
+        },
+        {
+          "label": "Hold Up",
+          "seconds": 6,
+          "video": "video/elbow-bending up.mov"
+        },
+        {
+          "label": "Hold Down",
+          "seconds": 6,
+          "video": "video/elbow-bending down.mov"
+        }
       ]
     },
     {
@@ -56,35 +56,10 @@
       "mode": "dual",
       "reps": 4,
       "restSeconds": 0,
+      "onlyDailySessions": [2, 4],
       "phases": [
         { "label": "Bend Stretch", "seconds": 30 },
         { "label": "Rest", "seconds": 5 }
-      ]
-    },
-    {
-      "id": "elbow-stretch-straight",
-      "name": "Elbow Stretch Straight",
-      "hint": "Assistant supports the elbow with one hand and holds the hand with the other (no pain). Straighten the elbow as much as tolerated. Hold the stretch, then brief rest. Only on sessions 2, 4, and 6 today.",
-      "emoji": "➡️",
-      "picture": null,
-      "mode": "timed",
-      "reps": 4,
-      "workSeconds": 30,
-      "restSeconds": 5,
-      "onlyDailySessions": [2, 4, 6]
-    },
-    {
-      "id": "fist-and-open",
-      "name": "Fist & Open",
-      "hint": "Make a fist and hold, then open with straight fingers and hold. That is one rep.",
-      "emoji": "✊",
-      "picture": null,
-      "mode": "dual",
-      "reps": 10,
-      "restSeconds": 0,
-      "phases": [
-        { "label": "Fist", "seconds": 5 },
-        { "label": "Open", "seconds": 10 }
       ]
     },
     {
@@ -102,17 +77,6 @@
       ]
     },
     {
-      "id": "thumb-slide",
-      "name": "Thumb Slide",
-      "hint": "Palm on the table. Slide your thumb away from your hand.",
-      "emoji": "👍",
-      "picture": null,
-      "mode": "timed",
-      "reps": 10,
-      "workSeconds": 5,
-      "restSeconds": 3
-    },
-    {
       "id": "cup-hold",
       "name": "Cup Hold",
       "hint": "Move your thumb away from your hand to form an \"L\" — like holding a cup.",
@@ -122,6 +86,20 @@
       "reps": 10,
       "workSeconds": 5,
       "restSeconds": 3
+    },
+    {
+      "id": "fist-and-open",
+      "name": "Fist & Open",
+      "hint": "Make a fist and hold, then open with straight fingers and hold. That is one rep.",
+      "emoji": "✊",
+      "picture": null,
+      "mode": "dual",
+      "reps": 10,
+      "restSeconds": 0,
+      "phases": [
+        { "label": "Fist", "seconds": 5 },
+        { "label": "Open", "seconds": 10 }
+      ]
     }
   ]
 }

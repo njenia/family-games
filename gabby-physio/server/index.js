@@ -47,6 +47,8 @@ function publicUser(profile) {
     dailyGoal: profile.daily_goal,
     avatarUrl: profile.avatar_url || null,
     catchGabbyHighScore: profile.catch_gabby_high_score || 0,
+    skipExercisePreview: !!profile.skip_exercise_preview,
+    bonusVideoSource: profile.bonus_video_source === 'raccoon' ? 'raccoon' : 'custom',
   };
 }
 
@@ -240,7 +242,7 @@ app.get('/api/me', requireAuth, wrap(async (req, res) => {
 }));
 
 app.patch('/api/me', requireAuth, wrap(async (req, res) => {
-  const { dailyGoal, displayName } = req.body || {};
+  const { dailyGoal, displayName, skipExercisePreview, bonusVideoSource } = req.body || {};
   const patch = {};
   if (dailyGoal !== undefined) {
     const goal = parseInt(dailyGoal, 10);
@@ -251,6 +253,21 @@ app.patch('/api/me', requireAuth, wrap(async (req, res) => {
     const dn = String(displayName).trim();
     if (!dn) return res.status(400).json({ error: 'Display name cannot be empty' });
     patch.display_name = dn;
+  }
+  if (skipExercisePreview !== undefined) {
+    if (typeof skipExercisePreview !== 'boolean') {
+      return res.status(400).json({ error: 'skipExercisePreview must be a boolean' });
+    }
+    patch.skip_exercise_preview = skipExercisePreview;
+  }
+  if (bonusVideoSource !== undefined) {
+    if (bonusVideoSource !== 'custom' && bonusVideoSource !== 'raccoon') {
+      return res.status(400).json({ error: 'bonusVideoSource must be custom or raccoon' });
+    }
+    patch.bonus_video_source = bonusVideoSource;
+  }
+  if (!Object.keys(patch).length) {
+    return res.status(400).json({ error: 'No valid fields to update' });
   }
   const { data, error } = await sb.from('profiles')
     .update(patch).eq('user_id', req.user.user_id).select().single();

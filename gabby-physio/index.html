@@ -352,10 +352,10 @@
   #bonus-video {
     display: none;
     z-index: 2;
-    width: min(72vw, 300px);
+    width: min(92vw, 560px);
     max-width: 100%;
-    max-height: min(28dvh, 220px);
-    border-radius: 16px;
+    max-height: min(52dvh, 480px);
+    border-radius: 18px;
     border: 3px solid rgba(255,215,0,0.55);
     background: #000;
     object-fit: contain;
@@ -1339,7 +1339,8 @@
       width: min(68vw, 280px);
     }
     #bonus-video {
-      max-height: min(22dvh, 160px);
+      width: min(90vw, 480px);
+      max-height: min(42dvh, 360px);
     }
 
     #ring-wrap { width: min(46vw, 180px); max-width: min(40dvh, 180px); }
@@ -1371,7 +1372,10 @@
 
     #exercise-video { max-height: min(28dvh, 160px); }
     #between-video { max-height: min(22dvh, 140px); }
-    #bonus-video { max-height: min(20dvh, 120px); }
+    #bonus-video {
+      width: min(88vw, 420px);
+      max-height: min(38dvh, 280px);
+    }
 
     #ring-wrap { width: min(36vw, 140px); max-width: min(34dvh, 140px); }
     #ring-track, #ring-fill { stroke-width: 10; }
@@ -1401,7 +1405,10 @@
       max-height: min(42dvh, 160px);
       width: min(50vw, 280px);
     }
-    #bonus-video { max-height: min(36dvh, 140px); width: min(40vw, 220px); }
+    #bonus-video {
+      width: min(58vw, 420px);
+      max-height: min(58dvh, 280px);
+    }
 
     #ring-wrap { width: min(28vw, 120px); max-width: min(40dvh, 120px); }
     #exercise-name,
@@ -1668,18 +1675,68 @@ let audioCtx = null;
 const SOUND_MUTE_KEY = 'gabby-physio-sound-muted';
 const SKIP_PREVIEW_KEY = 'gabby-physio-skip-exercise-preview';
 const BONUS_VIDEO_SOURCE_KEY = 'gabby-physio-bonus-video-source';
+const SETTINGS_MIGRATED_KEY = 'gabby-physio-settings-migrated';
 const RACCOON_VID_URL = 'https://api.mapach.es/v1/vid';
 let soundMuted = false;
 let skipExercisePreview = false;
 /** @type {'custom' | 'raccoon'} */
 let bonusVideoSource = 'custom';
 try { soundMuted = localStorage.getItem(SOUND_MUTE_KEY) === '1'; } catch (_) {}
+// Preview / bonus source come from the profile after login; localStorage is only
+// a bootstrap until migrateLocalSettingsOnce() runs.
 try { skipExercisePreview = localStorage.getItem(SKIP_PREVIEW_KEY) === '1'; } catch (_) {}
 try {
   const src = localStorage.getItem(BONUS_VIDEO_SOURCE_KEY);
   if (src === 'raccoon' || src === 'custom') bonusVideoSource = src;
 } catch (_) {}
 
+function applyUserSettings(user) {
+  if (!user) return;
+  skipExercisePreview = !!user.skipExercisePreview;
+  bonusVideoSource = user.bonusVideoSource === 'raccoon' ? 'raccoon' : 'custom';
+  syncPreviewToggle();
+  syncBonusVideoSourceChoice();
+}
+
+/** Push one-time localStorage prefs into the profile when DB still has defaults. */
+async function migrateLocalSettingsOnce() {
+  if (!ME || !ME.user) return;
+  let migrated = false;
+  try { migrated = localStorage.getItem(SETTINGS_MIGRATED_KEY) === '1'; } catch (_) {}
+  if (migrated) {
+    applyUserSettings(ME.user);
+    return;
+  }
+
+  let localSkip = false;
+  let localBonus = 'custom';
+  try { localSkip = localStorage.getItem(SKIP_PREVIEW_KEY) === '1'; } catch (_) {}
+  try {
+    const src = localStorage.getItem(BONUS_VIDEO_SOURCE_KEY);
+    if (src === 'raccoon' || src === 'custom') localBonus = src;
+  } catch (_) {}
+
+  const patch = {};
+  if (!ME.user.skipExercisePreview && localSkip) patch.skipExercisePreview = true;
+  if ((ME.user.bonusVideoSource || 'custom') === 'custom' && localBonus === 'raccoon') {
+    patch.bonusVideoSource = 'raccoon';
+  }
+
+  try {
+    if (Object.keys(patch).length) {
+      const data = await api('PATCH', '/api/me', patch);
+      if (data.user) ME.user = data.user;
+    }
+    try { localStorage.setItem(SETTINGS_MIGRATED_KEY, '1'); } catch (_) {}
+    try {
+      localStorage.removeItem(SKIP_PREVIEW_KEY);
+      localStorage.removeItem(BONUS_VIDEO_SOURCE_KEY);
+    } catch (_) {}
+  } catch (_) {
+    // Keep using local bootstrap values if the column isn't migrated yet.
+  }
+  applyUserSettings(ME.user);
+}
 function betweenDelaySeconds() {
   return skipExercisePreview ? 0 : (CONFIG.betweenSeconds ?? 8);
 }
@@ -3616,14 +3673,14 @@ function setBetweenVisual(ex) {
 
 function getWorkVideo(ex) {
   if (!ex) return null;
-  if (ex.mode === 'timed') return exerciseVideoPath(ex.id, 'work');
+  if (ex.mode === 'timed') return resolveTimedVideo(ex, 'work');
   if (ex.mode === 'dual') {
     const phase = ex.phases && ex.phases[0];
-    return phase ? exerciseVideoPath(ex.id, phaseVideoSuffix(phase)) : null;
+    return phase ? resolvePhaseVideo(ex, phase) : null;
   }
   if (ex.mode === 'count') {
     const step = ex.sequence && ex.sequence[0];
-    return step ? exerciseVideoPath(ex.id, phaseVideoSuffix(step, 1)) : null;
+    return step ? resolvePhaseVideo(ex, step, 1) : null;
   }
   return null;
 }
@@ -3674,6 +3731,8 @@ function playBetweenPreviewVideo(ex) {
  *   count  → video/<id> <step-key>.mov
  * Phase/step key = last word of the label, lowercased (e.g. "Hold Up" → "up").
  * Optional phase.key overrides the label-derived suffix.
+ * Optional phase.video / ex.restVideo / ex.videos.work|rest override the path entirely
+ * (useful for compound exercises that reuse clips from other ids).
  */
 function phaseVideoSuffix(phase, fallbackIndex) {
   if (phase && phase.key) return String(phase.key).trim().toLowerCase();
@@ -3688,6 +3747,24 @@ function phaseVideoSuffix(phase, fallbackIndex) {
 function exerciseVideoPath(id, suffix) {
   if (!id || !suffix) return null;
   return `video/${id} ${suffix}.mov`;
+}
+
+function resolvePhaseVideo(ex, phase, fallbackIndex) {
+  if (phase && phase.video) return phase.video;
+  return exerciseVideoPath(ex.id, phaseVideoSuffix(phase, fallbackIndex));
+}
+
+function resolveTimedVideo(ex, phase) {
+  const videos = ex.videos || {};
+  if (phase === 'work' && videos.work) return videos.work;
+  if (phase === 'rest' && (videos.rest || ex.restVideo)) return videos.rest || ex.restVideo;
+  return exerciseVideoPath(ex.id, phase === 'work' ? 'work' : 'rest');
+}
+
+function resolveRestVideo(ex) {
+  if (ex.restVideo) return ex.restVideo;
+  if (ex.videos && ex.videos.rest) return ex.videos.rest;
+  return exerciseVideoPath(ex.id, 'rest');
 }
 
 function stopDemoVideo() {
@@ -3737,21 +3814,21 @@ function resumeDemoVideo() {
 }
 
 function playTimedPhaseVideo(ex, phase) {
-  playDemoVideo(exerciseVideoPath(ex.id, phase === 'work' ? 'work' : 'rest'));
+  playDemoVideo(resolveTimedVideo(ex, phase));
 }
 
 function playDualPhaseVideo(ex) {
   if (state.phase === 'rest') {
-    playDemoVideo(exerciseVideoPath(ex.id, 'rest'));
+    playDemoVideo(resolveRestVideo(ex));
     return;
   }
   const p = ex.phases[state.phaseIndex];
-  playDemoVideo(p ? exerciseVideoPath(ex.id, phaseVideoSuffix(p, state.phaseIndex + 1)) : null);
+  playDemoVideo(p ? resolvePhaseVideo(ex, p, state.phaseIndex + 1) : null);
 }
 
 function playCountStepVideo(ex) {
   const step = (ex.sequence || [])[state.seqIndex];
-  playDemoVideo(step ? exerciseVideoPath(ex.id, phaseVideoSuffix(step, state.seqIndex + 1)) : null);
+  playDemoVideo(step ? resolvePhaseVideo(ex, step, state.seqIndex + 1) : null);
 }
 
 function stopBonusVideo() {
@@ -5107,10 +5184,19 @@ function syncPreviewToggle() {
     : 'Exercise preview is off. Tap to turn on.');
 }
 
-function toggleExercisePreview() {
+async function toggleExercisePreview() {
+  if (!ME) return;
+  const prev = skipExercisePreview;
   skipExercisePreview = !skipExercisePreview;
-  try { localStorage.setItem(SKIP_PREVIEW_KEY, skipExercisePreview ? '1' : '0'); } catch (_) {}
   syncPreviewToggle();
+  try {
+    const data = await api('PATCH', '/api/me', { skipExercisePreview });
+    ME.user = data.user;
+    applyUserSettings(ME.user);
+  } catch (_) {
+    skipExercisePreview = prev;
+    syncPreviewToggle();
+  }
 }
 
 function syncBonusVideoSourceChoice() {
@@ -5122,18 +5208,27 @@ function syncBonusVideoSourceChoice() {
   raccoon.setAttribute('aria-pressed', isRaccoon ? 'true' : 'false');
 }
 
-function setBonusVideoSource(source) {
+async function setBonusVideoSource(source) {
+  if (!ME) return;
   if (source !== 'custom' && source !== 'raccoon') return;
+  if (source === bonusVideoSource) return;
+  const prev = bonusVideoSource;
   bonusVideoSource = source;
-  try { localStorage.setItem(BONUS_VIDEO_SOURCE_KEY, bonusVideoSource); } catch (_) {}
   syncBonusVideoSourceChoice();
+  try {
+    const data = await api('PATCH', '/api/me', { bonusVideoSource: source });
+    ME.user = data.user;
+    applyUserSettings(ME.user);
+  } catch (_) {
+    bonusVideoSource = prev;
+    syncBonusVideoSourceChoice();
+  }
 }
 
 function showSettings() {
   if (!ME) return;
   $('goal-num').textContent = ME.user.dailyGoal;
-  syncPreviewToggle();
-  syncBonusVideoSourceChoice();
+  applyUserSettings(ME.user);
   showScreen('settings');
 }
 
@@ -5230,6 +5325,7 @@ async function refreshMe() {
   try {
     ME = await api('GET', `/api/me?date=${localDateStr()}`);
     await syncCatchGabbyHighScore();
+    await migrateLocalSettingsOnce();
     renderStartScreen();
   } catch (_) {}
 }
@@ -5257,6 +5353,7 @@ async function enterApp() {
   ME = me;
   applyConfig(scheme.config);
   await syncCatchGabbyHighScore();
+  await migrateLocalSettingsOnce();
   renderStartScreen();
   showScreen('start');
   CONFIG.bonusVideos = await loadBonusVideos();

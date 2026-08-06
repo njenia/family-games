@@ -72,3 +72,6 @@ Exercise demo clips are resolved by convention (not listed in JSON):
 - dual / count: `video/<id> <key>.mov` where `<key>` is the last word of the
   phase label (lowercased), e.g. `Hold Up` → `video/elbow-bending up.mov`
 - optional `"key"` on a phase overrides the label-derived suffix
+- optional `"video"` on a phase (or `"restVideo"` / `"videos.work|rest"` on the
+  exercise) overrides the path entirely — used when a compound exercise reuses
+  clips from other exercise ids
