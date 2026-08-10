@@ -554,6 +554,14 @@
     border-radius: 14px;
     filter: drop-shadow(0 4px 10px rgba(0,0,0,0.35)) drop-shadow(0 0 14px rgba(34,211,238,0.95));
   }
+  #rep-parade.scored {
+    animation: googoo-scored-pop 0.5s ease-out;
+  }
+  @keyframes googoo-scored-pop {
+    0%   { outline-color: #22d3ee; }
+    30%  { transform: scale(1.28); outline: 6px solid #ffd700; outline-offset: 7px; }
+    100% { transform: scale(1); }
+  }
 
   #googoo-toast {
     position: fixed;
@@ -562,20 +570,21 @@
     transform: translateX(-50%);
     z-index: 29;
     pointer-events: none;
-    font-size: clamp(1.1rem, 4vw, 1.5rem);
-    font-weight: 800;
-    color: #22d3ee;
-    text-shadow: 2px 2px 0 rgba(0,0,0,0.35);
+    font-size: clamp(1.4rem, 5.5vw, 2rem);
+    font-weight: 900;
+    color: #ffd700;
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.4), 0 0 18px rgba(255,215,0,0.7);
     opacity: 0;
   }
   #googoo-toast.show {
-    animation: googoo-toast-pop 1.1s ease-out;
+    animation: googoo-toast-pop 0.75s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
   @keyframes googoo-toast-pop {
-    0%   { transform: translateX(-50%) translateY(6px) scale(0.7); opacity: 0; }
-    25%  { transform: translateX(-50%) translateY(0) scale(1.2); opacity: 1; }
-    70%  { transform: translateX(-50%) translateY(-8px) scale(1); opacity: 1; }
-    100% { transform: translateX(-50%) translateY(-14px) scale(1); opacity: 0; }
+    0%   { transform: translateX(-50%) translateY(4px) scale(0.5); opacity: 0; }
+    18%  { transform: translateX(-50%) translateY(-4px) scale(1.35); opacity: 1; }
+    40%  { transform: translateX(-50%) translateY(-8px) scale(1.05); opacity: 1; }
+    75%  { transform: translateX(-50%) translateY(-14px) scale(1); opacity: 1; }
+    100% { transform: translateX(-50%) translateY(-22px) scale(1); opacity: 0; }
   }
 
   .pulse { animation: pulse 1s ease-in-out infinite; }
@@ -745,8 +754,7 @@
   #topbar > * { pointer-events: auto; }
 
   #app-title {
-    min-width: 0;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     font: inherit;
     font-size: clamp(0.95rem, 3.6vw, 1.15rem);
     font-weight: 800;
@@ -755,8 +763,6 @@
     text-shadow: 1px 1px 0 rgba(0,0,0,0.35);
     text-align: left;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     line-height: 1.2;
     background: none;
     border: none;
@@ -774,8 +780,8 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    flex: 0 1 auto;
-    min-width: 0;
+    flex: 0 0 auto;
+    margin-left: auto;
   }
 
   #topbar-nav {
@@ -848,28 +854,26 @@
     display: none;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    flex: 1 1 auto;
-    min-width: 0;
-    padding: 4px 10px;
+    gap: 4px;
+    flex: 0 0 auto;
+    padding: 3px 8px;
     border-radius: 999px;
     background: rgba(15, 8, 40, 0.45);
     border: 1px solid rgba(255,255,255,0.16);
-    font-size: clamp(0.68rem, 2.4vw, 0.82rem);
+    font-size: 0.72rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: rgba(255,255,255,0.9);
     white-space: nowrap;
-    overflow: hidden;
     pointer-events: none;
   }
-  #session-eta.active { display: flex; }
+  #session-eta.active { display: inline-flex; }
   #session-eta .eta-sep { color: rgba(255,255,255,0.35); font-weight: 500; }
   #session-left { color: var(--accent); }
   #session-finish { color: rgba(255,255,255,0.85); }
   #eta-ring {
-    width: 1.15em;
-    height: 1.15em;
+    width: 1em;
+    height: 1em;
     flex-shrink: 0;
     display: block;
     transform: rotate(-90deg);
@@ -885,16 +889,6 @@
     stroke-width: 2.6;
     stroke-linecap: round;
     will-change: stroke-dashoffset;
-  }
-
-  /* During a session, favor the clock over the long title / account chrome */
-  #topbar:has(#session-eta.active) #app-title {
-    flex: 0 1 28%;
-    max-width: 9.5rem;
-  }
-  #topbar:has(#session-eta.active) #topbar-nav .topbar-link:not(#btn-resume-session),
-  #topbar:has(#session-eta.active) #user-chip {
-    display: none;
   }
 
   #googoo-mic-status {
@@ -924,7 +918,7 @@
   #googoo-mic-status.active { display: flex; }
   #googoo-mic-status.warn { color: #ffb4b4; border-color: rgba(255,120,120,0.4); }
   #googoo-mic-status.heard { color: #fff; }
-  #googoo-mic-status.matched { color: #22d3ee; border-color: rgba(34,211,238,0.55); }
+  #googoo-mic-status.matched { color: #ffd700; border-color: rgba(255,215,0,0.55); font-weight: 800; }
 
   body:has(#googoo-mic-status.active) #screen-workout,
   body:has(#googoo-mic-status.active) #screen-between {
@@ -1393,8 +1387,6 @@
 
     #app-title { font-size: 0.85rem; }
     #user-chip-name { display: none; }
-    #session-finish,
-    #session-eta .eta-sep { display: none; }
     .topbar-link {
       padding: 8px 10px;
       font-size: 0.72rem;
@@ -1552,16 +1544,16 @@
 
 <header id="topbar">
   <button type="button" id="app-title" aria-label="Go to home">Gabby's Physio Adventure</button>
-  <div id="session-eta" aria-live="polite">
-    <svg id="eta-ring" viewBox="0 0 20 20" aria-hidden="true">
-      <circle id="eta-ring-track" cx="10" cy="10" r="7.5"></circle>
-      <circle id="eta-ring-fill" cx="10" cy="10" r="7.5"></circle>
-    </svg>
-    <span id="session-left">0:00 left</span>
-    <span class="eta-sep" aria-hidden="true">·</span>
-    <span id="session-finish">Finish at —</span>
-  </div>
   <div id="topbar-right">
+    <div id="session-eta" aria-live="polite" title="">
+      <svg id="eta-ring" viewBox="0 0 20 20" aria-hidden="true">
+        <circle id="eta-ring-track" cx="10" cy="10" r="7.5"></circle>
+        <circle id="eta-ring-fill" cx="10" cy="10" r="7.5"></circle>
+      </svg>
+      <span id="session-left">0:00</span>
+      <span class="eta-sep" aria-hidden="true">·</span>
+      <span id="session-finish">—</span>
+    </div>
     <nav id="topbar-nav" aria-label="Account">
       <button class="topbar-link" id="btn-resume-session" type="button" aria-label="Resume session">▶ Resume</button>
       <button class="topbar-link" id="btn-history" type="button">Sessions</button>
@@ -2424,28 +2416,59 @@ function syncGabbyPong() {
   else gabbyPong.stop();
 }
 
-/* ---------- Googoo game: say "googoo" while the bottom parade picture is near center ---------- */
+/* ---------- Googoo game: make any sound while the bottom parade picture is near center ---------- */
 const GOOGOO_ZONE_FRACTION = 0.22; // "give or take" tolerance around screen center, as a fraction of width
 const GOOGOO_ZONE_MIN_PX = 90;     // minimum half-width of the center zone, for small screens
-const GOOGOO_HEAR_WINDOW_MS = 2200; // how recently "googoo" must have been heard to still count
-const GOOGOO_TRANSCRIPT_DISPLAY_MS = 2600; // how long a heard transcript stays on the mic status pill
+const GOOGOO_HEAR_WINDOW_MS = 2200; // how recently a sound must have been heard to still count
+const GOOGOO_SOUND_DISPLAY_MS = 700; // how long "heard you" stays on the mic status pill
 
-function matchesGoogoo(text) {
-  // Any audible speech counts — the recognizer only fires when it hears something.
-  return !!String(text || '').trim();
+/** Quick localized sparkle burst at (x, y) — the "point scored" celebration. */
+function googooPointBurst(x, y) {
+  for (let i = 0; i < 14; i++) {
+    const angle = rand(0, Math.PI * 2);
+    const speed = rand(2.5, 6);
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 1.5,
+      size: rand(6, 13),
+      rot: rand(0, Math.PI * 2),
+      color: pick(COLORS),
+      life: rand(22, 34),
+      update(p) { p.x += p.vx; p.y += p.vy; p.vy += 0.22; p.vx *= 0.96; },
+      draw(c, p) {
+        c.save();
+        c.translate(p.x, p.y);
+        c.rotate(p.rot);
+        c.globalAlpha = Math.min(1, p.life / 14);
+        c.fillStyle = p.color;
+        c.beginPath();
+        for (let k = 0; k < 5; k++) {
+          const a = (k / 5) * Math.PI * 2 - Math.PI / 2;
+          const r = k % 2 === 0 ? p.size : p.size * 0.42;
+          c.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        c.closePath();
+        c.fill();
+        c.restore();
+      },
+    });
+  }
+  startFx();
 }
 
 function showGoogooToast() {
   const el = $('googoo-toast');
   if (!el) return;
-  el.textContent = '+1 googoo!';
+  const n = state.googooScore || 0;
+  el.textContent = n > 1 ? `+1! (${n} points)` : '+1 point!';
   el.classList.remove('show');
   void el.offsetWidth;
   el.classList.add('show');
 }
 
-/** Live mic status pill: proves the mic is actually listening, and echoes back
- *  whatever the recognizer transcribed so mismatches are obvious. */
+/** Live mic status pill: proves the mic is actually listening, using instant
+ *  volume detection (no waiting on speech recognition) so feedback is immediate. */
 function updateGoogooMicStatus() {
   const el = $('googoo-mic-status');
   if (!el) return;
@@ -2457,9 +2480,9 @@ function updateGoogooMicStatus() {
   el.classList.add('active');
   el.classList.remove('warn', 'heard', 'matched');
 
-  if (!googooGame.SpeechRecognitionImpl) {
+  if (!googooGame.supportedApi) {
     el.classList.add('warn');
-    el.textContent = '🎤 Googoo game needs a browser with voice support (try Chrome)';
+    el.textContent = '🎤 Googoo game needs microphone support (try Chrome)';
     return;
   }
   if (googooGame.disabled) {
@@ -2468,124 +2491,143 @@ function updateGoogooMicStatus() {
     return;
   }
 
-  const heardRecently = googooGame.lastTranscript
-    && (Date.now() - googooGame.lastTranscriptAt < GOOGOO_TRANSCRIPT_DISPLAY_MS);
-  if (heardRecently) {
+  const now = Date.now();
+  if (googooGame.lastScoredAt && now - googooGame.lastScoredAt < 1400) {
+    el.classList.add('heard', 'matched');
+    el.textContent = '🎉 Point!';
+    return;
+  }
+  if (googooGame.lastSoundAt && now - googooGame.lastSoundAt < GOOGOO_SOUND_DISPLAY_MS) {
     el.classList.add('heard');
-    if (googooGame.lastMatched) el.classList.add('matched');
-    el.textContent = googooGame.lastMatched
-      ? `🎤 Heard "${googooGame.lastTranscript}" — score!`
-      : `🎤 Heard: "${googooGame.lastTranscript}"`;
+    el.textContent = '🔊 Heard you!';
     return;
   }
 
   if (googooGame.starting) el.textContent = '🎤 Turning on the microphone…';
-  else if (googooGame.listening) el.textContent = '🎤 Listening…';
+  else if (googooGame.listening) el.textContent = '🎤 Listening… make some noise!';
   else if (state.paused) el.textContent = '🎤 Paused';
   else el.textContent = '🎤 Microphone off';
 }
 
-/** Wraps the Web Speech API to listen for "googoo" and award a point when heard
- *  while the rep-parade picture is near the middle of the screen. Degrades to a
- *  no-op (no crash, no points) on browsers without speech recognition support. */
+/** Detects "any sound" via live microphone volume (Web Audio API) instead of
+ *  speech-to-text, so there's no network/recognition lag — feedback is near
+ *  instant. Degrades to a no-op (no crash, no points) without mic support. */
 const googooGame = {
-  SpeechRecognitionImpl: window.SpeechRecognition || window.webkitSpeechRecognition || null,
-  recognition: null,
+  supportedApi: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+  stream: null,
+  audioCtx: null,
+  analyser: null,
+  dataArray: null,
+  rafId: 0,
+  statusTimerId: 0,
   wantListening: false,
   listening: false,
   starting: false,
   disabled: false, // set once mic access is denied / unavailable, to stop retrying
-  lastHeardAt: 0,
-  lastTranscript: '',
-  lastTranscriptAt: 0,
-  lastMatched: false,
+  noiseFloor: 4,
+  lastSoundAt: 0,
+  lastScoredAt: 0,
   inZone: false,
   scoredThisEntry: false,
-  restartTimerId: 0,
-  statusTimerId: 0,
 
   get supported() {
-    return !!this.SpeechRecognitionImpl && !this.disabled;
+    return this.supportedApi && !this.disabled;
   },
 
-  ensureRecognition() {
-    if (this.recognition || !this.SpeechRecognitionImpl) return this.recognition;
-    const rec = new this.SpeechRecognitionImpl();
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = 'en-US';
-    rec.onstart = () => {
-      this.starting = false;
-      this.listening = true;
-      updateGoogooMicStatus();
-    };
-    rec.onresult = (e) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const transcript = e.results[i][0] && e.results[i][0].transcript;
-        if (!transcript) continue;
-        this.lastTranscript = transcript.trim();
-        this.lastTranscriptAt = Date.now();
-        this.lastMatched = matchesGoogoo(transcript);
-        if (this.lastMatched) {
-          this.lastHeardAt = Date.now();
-          this.maybeScore();
-        }
-      }
-      updateGoogooMicStatus();
-    };
-    rec.onerror = (e) => {
-      this.starting = false;
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        this.disabled = true;
-        this.wantListening = false;
-      }
-      // 'no-speech' / 'aborted' / transient network errors just let onend restart it.
-      updateGoogooMicStatus();
-    };
-    rec.onend = () => {
-      this.listening = false;
-      this.starting = false;
-      if (this.wantListening && !this.disabled) {
-        clearTimeout(this.restartTimerId);
-        this.restartTimerId = setTimeout(() => this._start(), 300);
-      }
-      updateGoogooMicStatus();
-    };
-    this.recognition = rec;
-    return rec;
-  },
-
-  _start() {
-    if (!this.wantListening || this.disabled || this.listening || this.starting) return;
-    const rec = this.ensureRecognition();
-    if (!rec) return;
+  /** Opens the mic + analyser once and keeps them warm for the whole session,
+   *  so round-to-round (and the very first round, if pre-warmed) has ~zero lag. */
+  async _ensureStream() {
+    if (this.stream || this.starting || this.disabled) return;
+    this.starting = true;
+    updateGoogooMicStatus();
     try {
-      rec.start();
-      this.starting = true;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      });
+      this.stream = stream;
+      this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = this.audioCtx.createMediaStreamSource(stream);
+      this.analyser = this.audioCtx.createAnalyser();
+      this.analyser.fftSize = 512;
+      this.analyser.smoothingTimeConstant = 0.1;
+      source.connect(this.analyser);
+      this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+      this.starting = false;
+      if (this.wantListening) this._runLoop();
       updateGoogooMicStatus();
     } catch (_) {
-      // Already running, or a transient failure — the onend restart timer will retry.
+      this.starting = false;
+      this.disabled = true;
+      this.wantListening = false;
+      updateGoogooMicStatus();
+    }
+  },
+
+  /** Call as early as possible (session start) to eliminate first-round mic lag. */
+  prewarm() {
+    if (this.supported) this._ensureStream();
+  },
+
+  /** Fully releases the mic hardware — call only when the session truly ends. */
+  teardown() {
+    this.stop();
+    if (this.stream) {
+      this.stream.getTracks().forEach((t) => t.stop());
+      this.stream = null;
+    }
+    if (this.audioCtx) {
+      try { this.audioCtx.close(); } catch (_) {}
+      this.audioCtx = null;
+    }
+    this.analyser = null;
+    this.dataArray = null;
+  },
+
+  _runLoop() {
+    if (this.listening) return;
+    this.listening = true;
+    this._loop();
+  },
+
+  _loop() {
+    if (!this.listening) return;
+    this.rafId = requestAnimationFrame(() => this._loop());
+    if (!this.analyser) return;
+    this.analyser.getByteTimeDomainData(this.dataArray);
+    let peak = 0;
+    for (let i = 0; i < this.dataArray.length; i++) {
+      const dev = Math.abs(this.dataArray[i] - 128);
+      if (dev > peak) peak = dev;
+    }
+    // Slowly track ambient noise while quiet so normal room hum doesn't trip it.
+    if (peak < this.noiseFloor + 4) this.noiseFloor = this.noiseFloor * 0.97 + peak * 0.03;
+    const threshold = Math.max(11, this.noiseFloor + 8);
+    if (peak > threshold) {
+      this.lastSoundAt = Date.now();
+      this.maybeScore();
     }
   },
 
   start() {
     if (!this.supported) return;
     this.wantListening = true;
-    this._start();
-    if (!this.statusTimerId) this.statusTimerId = setInterval(updateGoogooMicStatus, 350);
+    if (this.stream) this._runLoop();
+    else this._ensureStream();
+    if (!this.statusTimerId) this.statusTimerId = setInterval(updateGoogooMicStatus, 150);
     updateGoogooMicStatus();
   },
 
+  /** Pauses the analysis loop between rounds but keeps the mic hardware warm. */
   stop() {
     this.wantListening = false;
-    clearTimeout(this.restartTimerId);
-    this.restartTimerId = 0;
+    this.listening = false;
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = 0;
+    }
     if (this.statusTimerId) {
       clearInterval(this.statusTimerId);
       this.statusTimerId = 0;
-    }
-    if (this.recognition && (this.listening || this.starting)) {
-      try { this.recognition.stop(); } catch (_) {}
     }
     updateGoogooMicStatus();
   },
@@ -2603,21 +2645,29 @@ const googooGame = {
   resetEntry() {
     this.inZone = false;
     this.scoredThisEntry = false;
-    $('rep-parade').classList.remove('in-zone');
+    $('rep-parade').classList.remove('in-zone', 'scored');
   },
 
   maybeScore() {
     if (!this.inZone || this.scoredThisEntry) return;
-    if (Date.now() - this.lastHeardAt > GOOGOO_HEAR_WINDOW_MS) return;
+    if (Date.now() - this.lastSoundAt > GOOGOO_HEAR_WINDOW_MS) return;
     this.scoredThisEntry = true;
+    this.lastScoredAt = Date.now();
     state.googooScore = (state.googooScore || 0) + 1;
     showGoogooToast();
+    updateGoogooMicStatus();
+    const el = $('rep-parade');
+    el.classList.remove('scored');
+    void el.offsetWidth;
+    el.classList.add('scored');
+    const rect = el.getBoundingClientRect();
+    googooPointBurst(rect.left + rect.width / 2, rect.top + rect.height / 2);
     if (!soundMuted) sounds.googoo();
   },
 };
 
 function shouldListenForGoogoo() {
-  // Mic only while the moving animal is visible (a Googoo round)
+  // Mic analysis only while the moving animal is visible (a Googoo round)
   return googooGame.supported && state.sessionLive && !state.paused
     && !$('celebration').classList.contains('active')
     && repParade.active;
@@ -4072,8 +4122,11 @@ function updateSessionEta(forceFinish = false) {
     state.sessionTotalSec = Math.max(rem, 1);
   }
   const leftSec = sessionEtaRemainingMs() / 1000;
-  $('session-left').textContent = `${formatDuration(leftSec)} left`;
-  $('session-finish').textContent = `Finish at ${formatFinishClock(new Date(state.finishAtMs))}`;
+  const leftLabel = formatDuration(leftSec);
+  const finishLabel = formatFinishClock(new Date(state.finishAtMs));
+  $('session-left').textContent = leftLabel;
+  $('session-finish').textContent = finishLabel;
+  $('session-eta').title = `${leftLabel} left · Finish at ${finishLabel}`;
   updateEtaRing();
 }
 
@@ -5086,6 +5139,7 @@ function finishSession() {
   stopTimer();
   stopBetweenTimer();
   stopWorkoutSurprises();
+  googooGame.teardown();
   stopDemoVideo();
   stopBetweenVideo();
   state.between = false;
@@ -5236,6 +5290,7 @@ function beginSession() {
   startEtaTicker();
   startBetween();
   syncGoogooListening();
+  googooGame.prewarm(); // open the mic early so the first round has no startup lag
 }
 
 /* ============================== controls ============================== */
