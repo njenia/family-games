@@ -5,10 +5,13 @@ tracking (Supabase Postgres).
 
 ## Setup
 
-1. **Create the tables**: open your Supabase project → SQL Editor → paste and run
-   `supabase/migrations/0001_init.sql`, then `supabase/migrations/0002_avatars.sql`
+1. **Create the tables**: open your Supabase project → SQL Editor → paste and run,
+   in order: `supabase/migrations/0001_init.sql`, then `0002_avatars.sql`
    (adds profile photos + the `avatars` storage bucket), then
-   `supabase/migrations/0003_catch_gabby_high_score.sql` (Catch Gabby personal best).
+   `0003_catch_gabby_high_score.sql` (Catch Gabby personal best), then
+   `0004_profile_settings.sql` (exercise preview toggle), then
+   `0005_bonus_video_sources_multi.sql` (choose one or more bonus video sources:
+   custom clips, raccoons, bunnies).
 2. **Environment**: copy `.env.example` to `.env` and fill in `SUPABASE_URL`,
    `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (Project Settings → API Keys).
 

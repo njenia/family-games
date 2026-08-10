@@ -39,6 +39,15 @@ function defaultSchemeConfig() {
   return cfg;
 }
 
+const BONUS_VIDEO_SOURCE_VALUES = ['custom', 'raccoon', 'bunny'];
+
+function normalizeBonusVideoSources(list) {
+  const clean = Array.isArray(list)
+    ? [...new Set(list.filter((s) => BONUS_VIDEO_SOURCE_VALUES.includes(s)))]
+    : [];
+  return clean.length ? clean : ['custom'];
+}
+
 function publicUser(profile) {
   return {
     id: profile.user_id,
@@ -48,7 +57,7 @@ function publicUser(profile) {
     avatarUrl: profile.avatar_url || null,
     catchGabbyHighScore: profile.catch_gabby_high_score || 0,
     skipExercisePreview: !!profile.skip_exercise_preview,
-    bonusVideoSource: profile.bonus_video_source === 'raccoon' ? 'raccoon' : 'custom',
+    bonusVideoSources: normalizeBonusVideoSources(profile.bonus_video_sources),
   };
 }
 
@@ -242,7 +251,7 @@ app.get('/api/me', requireAuth, wrap(async (req, res) => {
 }));
 
 app.patch('/api/me', requireAuth, wrap(async (req, res) => {
-  const { dailyGoal, displayName, skipExercisePreview, bonusVideoSource } = req.body || {};
+  const { dailyGoal, displayName, skipExercisePreview, bonusVideoSources } = req.body || {};
   const patch = {};
   if (dailyGoal !== undefined) {
     const goal = parseInt(dailyGoal, 10);
@@ -260,11 +269,14 @@ app.patch('/api/me', requireAuth, wrap(async (req, res) => {
     }
     patch.skip_exercise_preview = skipExercisePreview;
   }
-  if (bonusVideoSource !== undefined) {
-    if (bonusVideoSource !== 'custom' && bonusVideoSource !== 'raccoon') {
-      return res.status(400).json({ error: 'bonusVideoSource must be custom or raccoon' });
+  if (bonusVideoSources !== undefined) {
+    if (!Array.isArray(bonusVideoSources) || !bonusVideoSources.length
+      || !bonusVideoSources.every((s) => BONUS_VIDEO_SOURCE_VALUES.includes(s))) {
+      return res.status(400).json({
+        error: `bonusVideoSources must be a non-empty array of: ${BONUS_VIDEO_SOURCE_VALUES.join(', ')}`,
+      });
     }
-    patch.bonus_video_source = bonusVideoSource;
+    patch.bonus_video_sources = normalizeBonusVideoSources(bonusVideoSources);
   }
   if (!Object.keys(patch).length) {
     return res.status(400).json({ error: 'No valid fields to update' });

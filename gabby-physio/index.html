@@ -1565,10 +1565,11 @@
     </div>
     <div class="settings-card">
       <div class="section-label">Bonus videos</div>
-      <p class="settings-hint">Clips shown between exercises after you finish a set.</p>
-      <div class="settings-choice-row" role="group" aria-label="Bonus video source">
-        <button type="button" class="settings-choice" id="btn-bonus-custom" aria-pressed="true">Custom</button>
-        <button type="button" class="settings-choice" id="btn-bonus-raccoon" aria-pressed="false">Raccoons</button>
+      <p class="settings-hint">Clips shown between exercises after you finish a set. Pick one or more — we'll pick randomly among the ones you choose.</p>
+      <div class="settings-choice-row" role="group" aria-label="Bonus video sources">
+        <button type="button" class="settings-choice" data-bonus-source="custom" aria-pressed="true">Custom</button>
+        <button type="button" class="settings-choice" data-bonus-source="raccoon" aria-pressed="false">Raccoons</button>
+        <button type="button" class="settings-choice" data-bonus-source="bunny" aria-pressed="false">Bunnies</button>
       </div>
     </div>
   </section>
@@ -1673,6 +1674,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="bonus-videos.js"></script>
+<script src="bunny-videos.js"></script>
 <script src="repetition-graphics.js"></script>
 <script>
 'use strict';
@@ -1693,26 +1695,41 @@ let EXERCISES = [];
 let audioCtx = null;
 const SOUND_MUTE_KEY = 'gabby-physio-sound-muted';
 const SKIP_PREVIEW_KEY = 'gabby-physio-skip-exercise-preview';
-const BONUS_VIDEO_SOURCE_KEY = 'gabby-physio-bonus-video-source';
+const BONUS_VIDEO_SOURCE_KEY = 'gabby-physio-bonus-video-source'; // legacy single-choice key
+const BONUS_VIDEO_SOURCES_KEY = 'gabby-physio-bonus-video-sources';
 const SETTINGS_MIGRATED_KEY = 'gabby-physio-settings-migrated';
 const RACCOON_VID_URL = 'https://api.mapach.es/v1/vid';
+const BONUS_VIDEO_SOURCE_VALUES = ['custom', 'raccoon', 'bunny'];
 let soundMuted = false;
 let skipExercisePreview = false;
-/** @type {'custom' | 'raccoon'} */
-let bonusVideoSource = 'custom';
+/** @type {Array<'custom' | 'raccoon' | 'bunny'>} */
+let bonusVideoSources = ['custom'];
+
+function normalizeBonusVideoSources(list) {
+  const clean = Array.isArray(list)
+    ? [...new Set(list.filter((s) => BONUS_VIDEO_SOURCE_VALUES.includes(s)))]
+    : [];
+  return clean.length ? clean : ['custom'];
+}
+
 try { soundMuted = localStorage.getItem(SOUND_MUTE_KEY) === '1'; } catch (_) {}
-// Preview / bonus source come from the profile after login; localStorage is only
+// Preview / bonus sources come from the profile after login; localStorage is only
 // a bootstrap until migrateLocalSettingsOnce() runs.
 try { skipExercisePreview = localStorage.getItem(SKIP_PREVIEW_KEY) === '1'; } catch (_) {}
 try {
-  const src = localStorage.getItem(BONUS_VIDEO_SOURCE_KEY);
-  if (src === 'raccoon' || src === 'custom') bonusVideoSource = src;
+  const raw = localStorage.getItem(BONUS_VIDEO_SOURCES_KEY);
+  if (raw) {
+    bonusVideoSources = normalizeBonusVideoSources(JSON.parse(raw));
+  } else {
+    const legacy = localStorage.getItem(BONUS_VIDEO_SOURCE_KEY);
+    if (legacy === 'raccoon' || legacy === 'custom') bonusVideoSources = [legacy];
+  }
 } catch (_) {}
 
 function applyUserSettings(user) {
   if (!user) return;
   skipExercisePreview = !!user.skipExercisePreview;
-  bonusVideoSource = user.bonusVideoSource === 'raccoon' ? 'raccoon' : 'custom';
+  bonusVideoSources = normalizeBonusVideoSources(user.bonusVideoSources);
   syncPreviewToggle();
   syncBonusVideoSourceChoice();
 }
@@ -1728,17 +1745,24 @@ async function migrateLocalSettingsOnce() {
   }
 
   let localSkip = false;
-  let localBonus = 'custom';
+  let localSources = null;
   try { localSkip = localStorage.getItem(SKIP_PREVIEW_KEY) === '1'; } catch (_) {}
   try {
-    const src = localStorage.getItem(BONUS_VIDEO_SOURCE_KEY);
-    if (src === 'raccoon' || src === 'custom') localBonus = src;
+    const raw = localStorage.getItem(BONUS_VIDEO_SOURCES_KEY);
+    if (raw) {
+      localSources = normalizeBonusVideoSources(JSON.parse(raw));
+    } else {
+      const legacy = localStorage.getItem(BONUS_VIDEO_SOURCE_KEY);
+      if (legacy === 'raccoon' || legacy === 'custom') localSources = [legacy];
+    }
   } catch (_) {}
 
   const patch = {};
   if (!ME.user.skipExercisePreview && localSkip) patch.skipExercisePreview = true;
-  if ((ME.user.bonusVideoSource || 'custom') === 'custom' && localBonus === 'raccoon') {
-    patch.bonusVideoSource = 'raccoon';
+  const currentSources = normalizeBonusVideoSources(ME.user.bonusVideoSources);
+  if (localSources && currentSources.length === 1 && currentSources[0] === 'custom'
+    && !(localSources.length === 1 && localSources[0] === 'custom')) {
+    patch.bonusVideoSources = localSources;
   }
 
   try {
@@ -1750,6 +1774,7 @@ async function migrateLocalSettingsOnce() {
     try {
       localStorage.removeItem(SKIP_PREVIEW_KEY);
       localStorage.removeItem(BONUS_VIDEO_SOURCE_KEY);
+      localStorage.removeItem(BONUS_VIDEO_SOURCES_KEY);
     } catch (_) {}
   } catch (_) {
     // Keep using local bootstrap values if the column isn't migrated yet.
@@ -3893,29 +3918,51 @@ function playBonusSrcOnce(src, { encode = true } = {}) {
   });
 }
 
-/** Play a random bonus clip once. Resolves when it ends (or immediately if none). */
-async function playBonusVideoOnce() {
-  if (bonusVideoSource === 'raccoon') {
-    // Cache-bust so each celebration fetches a fresh random clip from the API.
-    return playBonusSrcOnce(`${RACCOON_VID_URL}?t=${Date.now()}`, { encode: false });
-  }
-
-  let list = (CONFIG && CONFIG.bonusVideos && CONFIG.bonusVideos.length)
-    ? CONFIG.bonusVideos
-    : [];
+async function playFromLocalPool(list, folder, lastIndexKey) {
   if (!list.length) {
-    list = await loadBonusVideos();
-    if (CONFIG) CONFIG.bonusVideos = list;
-  }
-  if (!list.length) {
-    console.warn('No bonus videos found in', BONUS_FOLDER);
+    console.warn('No videos found in', folder);
     stopBonusVideo();
     return;
   }
   let i;
-  do { i = Math.floor(Math.random() * list.length); } while (i === state.lastBonusIndex && list.length > 1);
-  state.lastBonusIndex = i;
+  do { i = Math.floor(Math.random() * list.length); } while (i === state[lastIndexKey] && list.length > 1);
+  state[lastIndexKey] = i;
   return playBonusSrcOnce(list[i]);
+}
+
+async function customBonusVideoList() {
+  let list = (CONFIG && CONFIG.bonusVideos && CONFIG.bonusVideos.length) ? CONFIG.bonusVideos : [];
+  if (!list.length) {
+    list = await loadBonusVideos();
+    if (CONFIG) CONFIG.bonusVideos = list;
+  }
+  return list;
+}
+
+async function bunnyVideoList() {
+  let list = (CONFIG && CONFIG.bunnyVideos && CONFIG.bunnyVideos.length) ? CONFIG.bunnyVideos : [];
+  if (!list.length) {
+    list = await loadBunnyVideos();
+    if (CONFIG) CONFIG.bunnyVideos = list;
+  }
+  return list;
+}
+
+/** Play a random bonus clip once, from a randomly chosen enabled source. Resolves when it ends. */
+async function playBonusVideoOnce() {
+  const sources = bonusVideoSources.length ? bonusVideoSources : ['custom'];
+  const source = sources[Math.floor(Math.random() * sources.length)];
+
+  if (source === 'raccoon') {
+    // Cache-bust so each celebration fetches a fresh random clip from the API.
+    return playBonusSrcOnce(`${RACCOON_VID_URL}?t=${Date.now()}`, { encode: false });
+  }
+  if (source === 'bunny') {
+    const list = await bunnyVideoList();
+    return playFromLocalPool(list, BUNNY_FOLDER, 'lastBunnyIndex');
+  }
+  const list = await customBonusVideoList();
+  return playFromLocalPool(list, BONUS_FOLDER, 'lastBonusIndex');
 }
 
 /* ============================== state ============================== */
@@ -3942,6 +3989,7 @@ const state = {
   betweenTimerId: null,
   celebrationTimerId: null,
   lastBonusIndex: -1,
+  lastBunnyIndex: -1,
   gabbyRep: 0,
   graphicRep: -1,
   // server session tracking
@@ -5101,6 +5149,8 @@ $('btn-restart').addEventListener('click', () => {
 /* ============================== load config ============================== */
 const BONUS_FOLDER = 'video/bonus videos';
 const BONUS_VIDEO_EXT = /\.(mov|mp4|webm|m4v)$/i;
+const BUNNY_FOLDER = 'video/bunny videos';
+const BUNNY_VIDEO_EXT = /\.(mov|mp4|webm|m4v)$/i;
 const REP_GRAPHICS_FOLDER = 'graphics/repititions';
 const REP_GRAPHICS_EXT = /\.(png|jpe?g|webp|gif|svg)$/i;
 
@@ -5199,6 +5249,35 @@ async function loadBonusVideos() {
   return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
+async function loadBunnyVideosByProbe() {
+  const checks = [];
+  for (let i = 1; i <= 40; i++) {
+    checks.push(probeVideoFile(`${BUNNY_FOLDER}/bunny_${i}.mp4`));
+  }
+  const results = await Promise.all(checks);
+  const found = [];
+  for (let i = 0; i < results.length; i++) {
+    if (results[i]) found.push(`${BUNNY_FOLDER}/bunny_${i + 1}.mp4`);
+  }
+  return found;
+}
+
+async function loadBunnyVideos() {
+  const set = new Set();
+
+  if (Array.isArray(window.BUNNY_VIDEOS)) {
+    window.BUNNY_VIDEOS.forEach((p) => set.add(p));
+  }
+
+  const fromDir = await loadPathsFromDirectory(BUNNY_FOLDER, BUNNY_VIDEO_EXT);
+  if (fromDir) fromDir.forEach((p) => set.add(p));
+
+  const probed = await loadBunnyVideosByProbe();
+  probed.forEach((p) => set.add(p));
+
+  return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
 async function loadRepetitionGraphics() {
   const set = new Set();
   if (Array.isArray(window.REPETITION_GRAPHICS)) {
@@ -5213,6 +5292,7 @@ function applyConfig(config) {
   CONFIG = config;
   EXERCISES = config.exercises || [];
   if (!Array.isArray(CONFIG.bonusVideos)) CONFIG.bonusVideos = [];
+  if (!Array.isArray(CONFIG.bunnyVideos)) CONFIG.bunnyVideos = [];
   if (config.title) {
     document.title = config.title;
     $('app-title').textContent = config.title;
@@ -5383,8 +5463,9 @@ async function changeGoal(delta) {
 $('btn-goal-minus').addEventListener('click', () => changeGoal(-1));
 $('btn-goal-plus').addEventListener('click', () => changeGoal(1));
 $('btn-toggle-preview').addEventListener('click', toggleExercisePreview);
-$('btn-bonus-custom').addEventListener('click', () => setBonusVideoSource('custom'));
-$('btn-bonus-raccoon').addEventListener('click', () => setBonusVideoSource('raccoon'));
+document.querySelectorAll('.settings-choice[data-bonus-source]').forEach((btn) => {
+  btn.addEventListener('click', () => toggleBonusVideoSource(btn.dataset.bonusSource));
+});
 
 function syncPreviewToggle() {
   const btn = $('btn-toggle-preview');
@@ -5413,27 +5494,30 @@ async function toggleExercisePreview() {
 }
 
 function syncBonusVideoSourceChoice() {
-  const custom = $('btn-bonus-custom');
-  const raccoon = $('btn-bonus-raccoon');
-  if (!custom || !raccoon) return;
-  const isRaccoon = bonusVideoSource === 'raccoon';
-  custom.setAttribute('aria-pressed', isRaccoon ? 'false' : 'true');
-  raccoon.setAttribute('aria-pressed', isRaccoon ? 'true' : 'false');
+  document.querySelectorAll('.settings-choice[data-bonus-source]').forEach((btn) => {
+    const on = bonusVideoSources.includes(btn.dataset.bonusSource);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
 }
 
-async function setBonusVideoSource(source) {
+async function toggleBonusVideoSource(source) {
   if (!ME) return;
-  if (source !== 'custom' && source !== 'raccoon') return;
-  if (source === bonusVideoSource) return;
-  const prev = bonusVideoSource;
-  bonusVideoSource = source;
+  if (!BONUS_VIDEO_SOURCE_VALUES.includes(source)) return;
+  const prev = bonusVideoSources;
+  const isOn = bonusVideoSources.includes(source);
+  // Keep at least one source selected.
+  if (isOn && bonusVideoSources.length === 1) return;
+  const next = isOn
+    ? bonusVideoSources.filter((s) => s !== source)
+    : [...bonusVideoSources, source];
+  bonusVideoSources = next;
   syncBonusVideoSourceChoice();
   try {
-    const data = await api('PATCH', '/api/me', { bonusVideoSource: source });
+    const data = await api('PATCH', '/api/me', { bonusVideoSources: next });
     ME.user = data.user;
     applyUserSettings(ME.user);
   } catch (_) {
-    bonusVideoSource = prev;
+    bonusVideoSources = prev;
     syncBonusVideoSourceChoice();
   }
 }
@@ -5577,6 +5661,7 @@ async function enterApp() {
   renderStartScreen();
   showScreen('start');
   CONFIG.bonusVideos = await loadBonusVideos();
+  CONFIG.bunnyVideos = await loadBunnyVideos();
   REPETITION_GRAPHICS = await loadRepetitionGraphics();
 }
 

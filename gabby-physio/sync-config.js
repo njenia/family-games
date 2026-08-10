@@ -29,6 +29,14 @@ writeList(
 );
 
 writeList(
+  'bunny-videos.js',
+  'BUNNY_VIDEOS',
+  path.join(root, 'video', 'bunny videos'),
+  'video/bunny videos/',
+  /\.(mov|mp4|webm|m4v)$/i
+);
+
+writeList(
   'repetition-graphics.js',
   'REPETITION_GRAPHICS',
   path.join(root, 'graphics', 'repititions'),
