@@ -2416,17 +2416,17 @@ function syncGabbyPong() {
   else gabbyPong.stop();
 }
 
-/* ---------- Googoo game: say "goo" while the bottom parade picture is near center ---------- */
+/* ---------- Googoo game: say "Bingo!" while the bottom parade picture is near center ---------- */
 const GOOGOO_ZONE_FRACTION = 0.22; // "give or take" tolerance around screen center, as a fraction of width
 const GOOGOO_ZONE_MIN_PX = 90;     // minimum half-width of the center zone, for small screens
-const GOOGOO_HEAR_WINDOW_MS = 2200; // how recently "goo" must have been heard to still count
+const GOOGOO_HEAR_WINDOW_MS = 2200; // how recently "Bingo!" must have been heard to still count
 const GOOGOO_SOUND_DISPLAY_MS = 900; // how long "heard you" / a transcript stays on the mic status pill
 
-/** Only this one clear, short word counts — not any sound. Small allowance for
- *  speech-recognition quirks ("go", "gooo", "goo goo") but nothing else. */
+/** Only this one clear, distinct word counts — not any sound. Small allowance
+ *  for speech-recognition quirks (a drawn-out "bingoo") but nothing else. */
 function matchesGoogoo(text) {
   const t = ` ${String(text || '').toLowerCase().replace(/[^a-z]+/g, ' ')} `;
-  return /\bgo{1,4}\b(\s*\bgo{1,4}\b)?/.test(t);
+  return /\bbingo+\b/.test(t);
 }
 
 /** Quick localized sparkle burst at (x, y) — the "point scored" celebration. */
@@ -2515,20 +2515,20 @@ function updateGoogooMicStatus() {
   }
   if (googooGame.lastSoundAt && now - googooGame.lastSoundAt < GOOGOO_SOUND_DISPLAY_MS) {
     el.classList.add('heard');
-    el.textContent = '🔊 Heard you — say "goo"!';
+    el.textContent = '🔊 Heard you — say "Bingo!"';
     return;
   }
 
   if (googooGame.starting) el.textContent = '🎤 Turning on the microphone…';
-  else if (googooGame.listening) el.textContent = '🎤 Listening for "goo"…';
+  else if (googooGame.listening) el.textContent = '🎤 Listening for "Bingo!"…';
   else if (state.paused) el.textContent = '🎤 Paused';
   else el.textContent = '🎤 Microphone off';
 }
 
-/** Wraps the Web Speech API to listen specifically for "goo" — one clear, short
- *  word, not just any sound — and award a point when heard while the rep-parade
- *  picture is near the middle of the screen. Degrades to a no-op (no crash, no
- *  points) on browsers without speech recognition support. */
+/** Wraps the Web Speech API to listen specifically for "Bingo!" — one clear,
+ *  distinct word, not just any sound — and award a point when heard while the
+ *  rep-parade picture is near the middle of the screen. Degrades to a no-op
+ *  (no crash, no points) on browsers without speech recognition support. */
 const googooGame = {
   SpeechRecognitionImpl: window.SpeechRecognition || window.webkitSpeechRecognition || null,
   recognition: null,
@@ -2537,7 +2537,7 @@ const googooGame = {
   starting: false,
   disabled: false, // set once mic access is denied / unavailable, to stop retrying
   lastSoundAt: 0,       // local voice-activity ping — instant, not word-matched
-  lastMatchedAt: 0,     // last time the transcript actually matched "goo"
+  lastMatchedAt: 0,     // last time the transcript actually matched "Bingo!"
   lastTranscript: '',
   lastTranscriptAt: 0,
   lastMatched: false,
