@@ -548,6 +548,12 @@
     filter: drop-shadow(0 4px 10px rgba(0,0,0,0.35));
   }
   #rep-parade.active { display: block; }
+  #rep-parade.in-zone {
+    outline: 4px solid #22d3ee;
+    outline-offset: 5px;
+    border-radius: 14px;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,0.35)) drop-shadow(0 0 14px rgba(34,211,238,0.95));
+  }
 
   #googoo-toast {
     position: fixed;
@@ -888,6 +894,40 @@
   body:has(#session-eta.active) #screen-workout,
   body:has(#session-eta.active) #screen-between {
     padding-top: 28px;
+  }
+
+  #googoo-mic-status {
+    position: fixed;
+    top: calc(max(10px, var(--safe-top)) + 44px + 36px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 19;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: rgba(15, 8, 40, 0.55);
+    border: 1px solid rgba(255,255,255,0.18);
+    backdrop-filter: blur(6px);
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.82);
+    white-space: nowrap;
+    max-width: min(92vw, 380px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+  #googoo-mic-status.active { display: flex; }
+  #googoo-mic-status.warn { color: #ffb4b4; border-color: rgba(255,120,120,0.4); }
+  #googoo-mic-status.heard { color: #fff; }
+  #googoo-mic-status.matched { color: #22d3ee; border-color: rgba(34,211,238,0.55); }
+
+  body:has(#googoo-mic-status.active) #screen-workout,
+  body:has(#googoo-mic-status.active) #screen-between {
+    padding-top: 56px;
   }
 
   /* ============ start / dashboard ============ */
@@ -1526,6 +1566,8 @@
   <span class="eta-sep" aria-hidden="true">·</span>
   <span id="session-finish">Finish at —</span>
 </div>
+
+<div id="googoo-mic-status" aria-live="polite"></div>
 
 <div id="app">
 
@@ -2371,8 +2413,10 @@ function syncGabbyPong() {
 }
 
 /* ---------- Googoo game: say "googoo" while the bottom parade picture is near center ---------- */
-const GOOGOO_ZONE_FRACTION = 0.12; // "give or take" tolerance around screen center, as a fraction of width
-const GOOGOO_HEAR_WINDOW_MS = 900; // how recently "googoo" must have been heard to still count
+const GOOGOO_ZONE_FRACTION = 0.22; // "give or take" tolerance around screen center, as a fraction of width
+const GOOGOO_ZONE_MIN_PX = 90;     // minimum half-width of the center zone, for small screens
+const GOOGOO_HEAR_WINDOW_MS = 2200; // how recently "googoo" must have been heard to still count
+const GOOGOO_TRANSCRIPT_DISPLAY_MS = 2600; // how long a heard transcript stays on the mic status pill
 
 function matchesGoogoo(text) {
   const t = ` ${String(text || '').toLowerCase().replace(/[^a-z]+/g, ' ')} `;
@@ -2388,6 +2432,46 @@ function showGoogooToast() {
   el.classList.add('show');
 }
 
+/** Live mic status pill: proves the mic is actually listening, and echoes back
+ *  whatever the recognizer transcribed so mismatches are obvious. */
+function updateGoogooMicStatus() {
+  const el = $('googoo-mic-status');
+  if (!el) return;
+  if (!state.sessionLive) {
+    el.classList.remove('active');
+    return;
+  }
+  el.classList.add('active');
+  el.classList.remove('warn', 'heard', 'matched');
+
+  if (!googooGame.SpeechRecognitionImpl) {
+    el.classList.add('warn');
+    el.textContent = '🎤 Googoo game needs a browser with voice support (try Chrome)';
+    return;
+  }
+  if (googooGame.disabled) {
+    el.classList.add('warn');
+    el.textContent = '🎤 Mic blocked — allow microphone access to play the Googoo game';
+    return;
+  }
+
+  const heardRecently = googooGame.lastTranscript
+    && (Date.now() - googooGame.lastTranscriptAt < GOOGOO_TRANSCRIPT_DISPLAY_MS);
+  if (heardRecently) {
+    el.classList.add('heard');
+    if (googooGame.lastMatched) el.classList.add('matched');
+    el.textContent = googooGame.lastMatched
+      ? `🎤 Heard "${googooGame.lastTranscript}" — googoo!`
+      : `🎤 Heard: "${googooGame.lastTranscript}"`;
+    return;
+  }
+
+  if (googooGame.starting) el.textContent = '🎤 Turning on the microphone…';
+  else if (googooGame.listening) el.textContent = '🎤 Listening for "googoo"…';
+  else if (state.paused) el.textContent = '🎤 Paused';
+  else el.textContent = '🎤 Microphone off';
+}
+
 /** Wraps the Web Speech API to listen for "googoo" and award a point when heard
  *  while the rep-parade picture is near the middle of the screen. Degrades to a
  *  no-op (no crash, no points) on browsers without speech recognition support. */
@@ -2396,11 +2480,16 @@ const googooGame = {
   recognition: null,
   wantListening: false,
   listening: false,
+  starting: false,
   disabled: false, // set once mic access is denied / unavailable, to stop retrying
   lastHeardAt: 0,
+  lastTranscript: '',
+  lastTranscriptAt: 0,
+  lastMatched: false,
   inZone: false,
   scoredThisEntry: false,
   restartTimerId: 0,
+  statusTimerId: 0,
 
   get supported() {
     return !!this.SpeechRecognitionImpl && !this.disabled;
@@ -2412,41 +2501,55 @@ const googooGame = {
     rec.continuous = true;
     rec.interimResults = true;
     rec.lang = 'en-US';
+    rec.onstart = () => {
+      this.starting = false;
+      this.listening = true;
+      updateGoogooMicStatus();
+    };
     rec.onresult = (e) => {
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const transcript = e.results[i][0] && e.results[i][0].transcript;
-        if (transcript && matchesGoogoo(transcript)) {
+        if (!transcript) continue;
+        this.lastTranscript = transcript.trim();
+        this.lastTranscriptAt = Date.now();
+        this.lastMatched = matchesGoogoo(transcript);
+        if (this.lastMatched) {
           this.lastHeardAt = Date.now();
           this.maybeScore();
-          break;
         }
       }
+      updateGoogooMicStatus();
     };
     rec.onerror = (e) => {
+      this.starting = false;
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         this.disabled = true;
         this.wantListening = false;
       }
       // 'no-speech' / 'aborted' / transient network errors just let onend restart it.
+      updateGoogooMicStatus();
     };
     rec.onend = () => {
       this.listening = false;
+      this.starting = false;
       if (this.wantListening && !this.disabled) {
         clearTimeout(this.restartTimerId);
         this.restartTimerId = setTimeout(() => this._start(), 300);
       }
+      updateGoogooMicStatus();
     };
     this.recognition = rec;
     return rec;
   },
 
   _start() {
-    if (!this.wantListening || this.disabled || this.listening) return;
+    if (!this.wantListening || this.disabled || this.listening || this.starting) return;
     const rec = this.ensureRecognition();
     if (!rec) return;
     try {
       rec.start();
-      this.listening = true;
+      this.starting = true;
+      updateGoogooMicStatus();
     } catch (_) {
       // Already running, or a transient failure — the onend restart timer will retry.
     }
@@ -2456,29 +2559,38 @@ const googooGame = {
     if (!this.supported) return;
     this.wantListening = true;
     this._start();
+    if (!this.statusTimerId) this.statusTimerId = setInterval(updateGoogooMicStatus, 350);
+    updateGoogooMicStatus();
   },
 
   stop() {
     this.wantListening = false;
     clearTimeout(this.restartTimerId);
     this.restartTimerId = 0;
-    if (this.recognition && this.listening) {
+    if (this.statusTimerId) {
+      clearInterval(this.statusTimerId);
+      this.statusTimerId = 0;
+    }
+    if (this.recognition && (this.listening || this.starting)) {
       try { this.recognition.stop(); } catch (_) {}
     }
+    updateGoogooMicStatus();
   },
 
   /** Called every animation frame the rep-parade picture is active/visible. */
   updateZone(x, screenW) {
-    const tolerance = Math.max(48, screenW * GOOGOO_ZONE_FRACTION);
+    const tolerance = Math.max(GOOGOO_ZONE_MIN_PX, screenW * GOOGOO_ZONE_FRACTION);
     const inZone = Math.abs(x - screenW / 2) <= tolerance;
     if (inZone && !this.inZone) this.scoredThisEntry = false;
     this.inZone = inZone;
+    $('rep-parade').classList.toggle('in-zone', inZone);
     if (inZone) this.maybeScore();
   },
 
   resetEntry() {
     this.inZone = false;
     this.scoredThisEntry = false;
+    $('rep-parade').classList.remove('in-zone');
   },
 
   maybeScore() {
@@ -4967,6 +5079,7 @@ function finishSession() {
   syncResumeButton();
   setWorkoutMusic(null);
   hideSessionEta();
+  updateGoogooMicStatus();
   clearDailyGoalCelebration();
 
   const dailyGoal = willCompleteDailyGoal();
