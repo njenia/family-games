@@ -11,7 +11,8 @@ tracking (Supabase Postgres).
    `0003_catch_gabby_high_score.sql` (Catch Gabby personal best), then
    `0004_profile_settings.sql` (exercise preview toggle), then
    `0005_bonus_video_sources_multi.sql` (choose one or more bonus video sources:
-   custom clips, raccoons, bunnies).
+   custom clips, raccoons, bunnies), then `0006_googoo_high_score.sql` (Googoo
+   game personal best).
 2. **Environment**: copy `.env.example` to `.env` and fill in `SUPABASE_URL`,
    `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (Project Settings → API Keys).
 
@@ -65,6 +66,13 @@ Defined in `supabase/migrations/0001_init.sql`:
 `npm run sync` regenerates `bonus-videos.js` from the bonus video folder and
 `repetition-graphics.js` from `graphics/repititions/` (random bottom parade
 images on a special rep). Filenames are never hard-coded in app logic.
+
+The bottom parade picture doubles as the **Googoo game**: while it's on screen,
+saying "googoo" as it crosses the middle of the screen scores a point (uses the
+Web Speech API; silently does nothing on browsers without speech recognition).
+Points accumulate for the session and reset next session; the best single
+session is shown at the end and tracked historically (`googoo_high_score`),
+alongside the Catch Gabby high score on the home screen.
 New accounts are seeded from `exercises.json` (the single exercise-config source
 of truth) into each user's scheme in the database. `GET /api/scheme` also reloads
 that file so existing accounts stay in sync when the scheme changes.
