@@ -893,7 +893,8 @@
 
   body:has(#session-eta.active) #screen-workout,
   body:has(#session-eta.active) #screen-between {
-    padding-top: 28px;
+    /* Clear fixed #session-eta (below topbar ~44px + chip height) */
+    padding-top: 72px;
   }
 
   #googoo-mic-status {
@@ -927,7 +928,8 @@
 
   body:has(#googoo-mic-status.active) #screen-workout,
   body:has(#googoo-mic-status.active) #screen-between {
-    padding-top: 56px;
+    /* Clear eta chip + googoo status stacked under the topbar */
+    padding-top: 108px;
   }
 
   /* ============ start / dashboard ============ */
