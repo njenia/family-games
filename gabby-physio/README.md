@@ -68,11 +68,11 @@ Defined in `supabase/migrations/0001_init.sql`:
 images on a special rep). Filenames are never hard-coded in app logic.
 
 The bottom parade picture doubles as the **Googoo game**, appearing on up to
-2 reps per exercise: while it's on screen, making any sound as it crosses the
-middle of the screen scores a point (highlighted with a glowing border). It
-uses live microphone volume via the Web Audio API — no speech recognition or
-network round-trip, so scoring is instant — and silently does nothing on
-browsers/devices without microphone support.
+2 reps per exercise: while it's on screen (highlighted with a glowing border),
+saying "goo" scores a point. It uses the Web Speech API — local voice-activity
+detection gives instant "heard you" feedback, while the transcript confirms
+the specific word — and silently does nothing on browsers without speech
+recognition support.
 Points accumulate for the session and reset next session; the best single
 session is shown at the end and tracked historically (`googoo_high_score`),
 alongside the Catch Gabby high score on the home screen.

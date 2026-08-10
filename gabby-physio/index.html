@@ -2416,11 +2416,18 @@ function syncGabbyPong() {
   else gabbyPong.stop();
 }
 
-/* ---------- Googoo game: make any sound while the bottom parade picture is near center ---------- */
+/* ---------- Googoo game: say "goo" while the bottom parade picture is near center ---------- */
 const GOOGOO_ZONE_FRACTION = 0.22; // "give or take" tolerance around screen center, as a fraction of width
 const GOOGOO_ZONE_MIN_PX = 90;     // minimum half-width of the center zone, for small screens
-const GOOGOO_HEAR_WINDOW_MS = 2200; // how recently a sound must have been heard to still count
-const GOOGOO_SOUND_DISPLAY_MS = 700; // how long "heard you" stays on the mic status pill
+const GOOGOO_HEAR_WINDOW_MS = 2200; // how recently "goo" must have been heard to still count
+const GOOGOO_SOUND_DISPLAY_MS = 900; // how long "heard you" / a transcript stays on the mic status pill
+
+/** Only this one clear, short word counts — not any sound. Small allowance for
+ *  speech-recognition quirks ("go", "gooo", "goo goo") but nothing else. */
+function matchesGoogoo(text) {
+  const t = ` ${String(text || '').toLowerCase().replace(/[^a-z]+/g, ' ')} `;
+  return /\bgo{1,4}\b(\s*\bgo{1,4}\b)?/.test(t);
+}
 
 /** Quick localized sparkle burst at (x, y) — the "point scored" celebration. */
 function googooPointBurst(x, y) {
@@ -2467,8 +2474,9 @@ function showGoogooToast() {
   el.classList.add('show');
 }
 
-/** Live mic status pill: proves the mic is actually listening, using instant
- *  volume detection (no waiting on speech recognition) so feedback is immediate. */
+/** Live mic status pill: proves the mic is actually listening. `onspeechstart`
+ *  gives near-instant "heard you" feedback (local voice-activity detection),
+ *  while the transcript shown afterward confirms whether it actually matched. */
 function updateGoogooMicStatus() {
   const el = $('googoo-mic-status');
   if (!el) return;
@@ -2480,9 +2488,9 @@ function updateGoogooMicStatus() {
   el.classList.add('active');
   el.classList.remove('warn', 'heard', 'matched');
 
-  if (!googooGame.supportedApi) {
+  if (!googooGame.SpeechRecognitionImpl) {
     el.classList.add('warn');
-    el.textContent = '🎤 Googoo game needs microphone support (try Chrome)';
+    el.textContent = '🎤 Googoo game needs a browser with voice support (try Chrome)';
     return;
   }
   if (googooGame.disabled) {
@@ -2497,137 +2505,136 @@ function updateGoogooMicStatus() {
     el.textContent = '🎉 Point!';
     return;
   }
+  const heardTranscript = googooGame.lastTranscript
+    && (now - googooGame.lastTranscriptAt < GOOGOO_SOUND_DISPLAY_MS);
+  if (heardTranscript) {
+    el.classList.add('heard');
+    if (googooGame.lastMatched) el.classList.add('matched');
+    el.textContent = `🎤 Heard: "${googooGame.lastTranscript}"`;
+    return;
+  }
   if (googooGame.lastSoundAt && now - googooGame.lastSoundAt < GOOGOO_SOUND_DISPLAY_MS) {
     el.classList.add('heard');
-    el.textContent = '🔊 Heard you!';
+    el.textContent = '🔊 Heard you — say "goo"!';
     return;
   }
 
   if (googooGame.starting) el.textContent = '🎤 Turning on the microphone…';
-  else if (googooGame.listening) el.textContent = '🎤 Listening… make some noise!';
+  else if (googooGame.listening) el.textContent = '🎤 Listening for "goo"…';
   else if (state.paused) el.textContent = '🎤 Paused';
   else el.textContent = '🎤 Microphone off';
 }
 
-/** Detects "any sound" via live microphone volume (Web Audio API) instead of
- *  speech-to-text, so there's no network/recognition lag — feedback is near
- *  instant. Degrades to a no-op (no crash, no points) without mic support. */
+/** Wraps the Web Speech API to listen specifically for "goo" — one clear, short
+ *  word, not just any sound — and award a point when heard while the rep-parade
+ *  picture is near the middle of the screen. Degrades to a no-op (no crash, no
+ *  points) on browsers without speech recognition support. */
 const googooGame = {
-  supportedApi: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
-  stream: null,
-  audioCtx: null,
-  analyser: null,
-  dataArray: null,
-  rafId: 0,
-  statusTimerId: 0,
+  SpeechRecognitionImpl: window.SpeechRecognition || window.webkitSpeechRecognition || null,
+  recognition: null,
   wantListening: false,
   listening: false,
   starting: false,
   disabled: false, // set once mic access is denied / unavailable, to stop retrying
-  noiseFloor: 4,
-  lastSoundAt: 0,
+  lastSoundAt: 0,       // local voice-activity ping — instant, not word-matched
+  lastMatchedAt: 0,     // last time the transcript actually matched "goo"
+  lastTranscript: '',
+  lastTranscriptAt: 0,
+  lastMatched: false,
   lastScoredAt: 0,
   inZone: false,
   scoredThisEntry: false,
+  restartTimerId: 0,
+  statusTimerId: 0,
 
   get supported() {
-    return this.supportedApi && !this.disabled;
+    return !!this.SpeechRecognitionImpl && !this.disabled;
   },
 
-  /** Opens the mic + analyser once and keeps them warm for the whole session,
-   *  so round-to-round (and the very first round, if pre-warmed) has ~zero lag. */
-  async _ensureStream() {
-    if (this.stream || this.starting || this.disabled) return;
-    this.starting = true;
-    updateGoogooMicStatus();
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-      });
-      this.stream = stream;
-      this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const source = this.audioCtx.createMediaStreamSource(stream);
-      this.analyser = this.audioCtx.createAnalyser();
-      this.analyser.fftSize = 512;
-      this.analyser.smoothingTimeConstant = 0.1;
-      source.connect(this.analyser);
-      this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+  ensureRecognition() {
+    if (this.recognition || !this.SpeechRecognitionImpl) return this.recognition;
+    const rec = new this.SpeechRecognitionImpl();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = 'en-US';
+    rec.onstart = () => {
       this.starting = false;
-      if (this.wantListening) this._runLoop();
+      this.listening = true;
+      updateGoogooMicStatus();
+    };
+    // Fires as soon as local voice-activity detection notices speech — near
+    // instant, well before a transcript is ready — so feedback isn't stuck.
+    rec.onspeechstart = () => {
+      this.lastSoundAt = Date.now();
+      updateGoogooMicStatus();
+    };
+    rec.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const transcript = e.results[i][0] && e.results[i][0].transcript;
+        if (!transcript) continue;
+        this.lastTranscript = transcript.trim();
+        this.lastTranscriptAt = Date.now();
+        this.lastMatched = matchesGoogoo(transcript);
+        if (this.lastMatched) {
+          this.lastMatchedAt = Date.now();
+          this.maybeScore();
+        }
+      }
+      updateGoogooMicStatus();
+    };
+    rec.onerror = (e) => {
+      this.starting = false;
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        this.disabled = true;
+        this.wantListening = false;
+      }
+      // 'no-speech' / 'aborted' / transient network errors just let onend restart it.
+      updateGoogooMicStatus();
+    };
+    rec.onend = () => {
+      this.listening = false;
+      this.starting = false;
+      if (this.wantListening && !this.disabled) {
+        clearTimeout(this.restartTimerId);
+        this.restartTimerId = setTimeout(() => this._start(), 250);
+      }
+      updateGoogooMicStatus();
+    };
+    this.recognition = rec;
+    return rec;
+  },
+
+  _start() {
+    if (!this.wantListening || this.disabled || this.listening || this.starting) return;
+    const rec = this.ensureRecognition();
+    if (!rec) return;
+    try {
+      rec.start();
+      this.starting = true;
       updateGoogooMicStatus();
     } catch (_) {
-      this.starting = false;
-      this.disabled = true;
-      this.wantListening = false;
-      updateGoogooMicStatus();
-    }
-  },
-
-  /** Call as early as possible (session start) to eliminate first-round mic lag. */
-  prewarm() {
-    if (this.supported) this._ensureStream();
-  },
-
-  /** Fully releases the mic hardware — call only when the session truly ends. */
-  teardown() {
-    this.stop();
-    if (this.stream) {
-      this.stream.getTracks().forEach((t) => t.stop());
-      this.stream = null;
-    }
-    if (this.audioCtx) {
-      try { this.audioCtx.close(); } catch (_) {}
-      this.audioCtx = null;
-    }
-    this.analyser = null;
-    this.dataArray = null;
-  },
-
-  _runLoop() {
-    if (this.listening) return;
-    this.listening = true;
-    this._loop();
-  },
-
-  _loop() {
-    if (!this.listening) return;
-    this.rafId = requestAnimationFrame(() => this._loop());
-    if (!this.analyser) return;
-    this.analyser.getByteTimeDomainData(this.dataArray);
-    let peak = 0;
-    for (let i = 0; i < this.dataArray.length; i++) {
-      const dev = Math.abs(this.dataArray[i] - 128);
-      if (dev > peak) peak = dev;
-    }
-    // Slowly track ambient noise while quiet so normal room hum doesn't trip it.
-    if (peak < this.noiseFloor + 4) this.noiseFloor = this.noiseFloor * 0.97 + peak * 0.03;
-    const threshold = Math.max(11, this.noiseFloor + 8);
-    if (peak > threshold) {
-      this.lastSoundAt = Date.now();
-      this.maybeScore();
+      // Already running, or a transient failure — the onend restart timer will retry.
     }
   },
 
   start() {
     if (!this.supported) return;
     this.wantListening = true;
-    if (this.stream) this._runLoop();
-    else this._ensureStream();
-    if (!this.statusTimerId) this.statusTimerId = setInterval(updateGoogooMicStatus, 150);
+    this._start();
+    if (!this.statusTimerId) this.statusTimerId = setInterval(updateGoogooMicStatus, 200);
     updateGoogooMicStatus();
   },
 
-  /** Pauses the analysis loop between rounds but keeps the mic hardware warm. */
   stop() {
     this.wantListening = false;
-    this.listening = false;
-    if (this.rafId) {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = 0;
-    }
+    clearTimeout(this.restartTimerId);
+    this.restartTimerId = 0;
     if (this.statusTimerId) {
       clearInterval(this.statusTimerId);
       this.statusTimerId = 0;
+    }
+    if (this.recognition && (this.listening || this.starting)) {
+      try { this.recognition.stop(); } catch (_) {}
     }
     updateGoogooMicStatus();
   },
@@ -2650,7 +2657,7 @@ const googooGame = {
 
   maybeScore() {
     if (!this.inZone || this.scoredThisEntry) return;
-    if (Date.now() - this.lastSoundAt > GOOGOO_HEAR_WINDOW_MS) return;
+    if (Date.now() - this.lastMatchedAt > GOOGOO_HEAR_WINDOW_MS) return;
     this.scoredThisEntry = true;
     this.lastScoredAt = Date.now();
     state.googooScore = (state.googooScore || 0) + 1;
@@ -5139,7 +5146,6 @@ function finishSession() {
   stopTimer();
   stopBetweenTimer();
   stopWorkoutSurprises();
-  googooGame.teardown();
   stopDemoVideo();
   stopBetweenVideo();
   state.between = false;
@@ -5290,7 +5296,6 @@ function beginSession() {
   startEtaTicker();
   startBetween();
   syncGoogooListening();
-  googooGame.prewarm(); // open the mic early so the first round has no startup lag
 }
 
 /* ============================== controls ============================== */
