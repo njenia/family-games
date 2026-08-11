@@ -12,7 +12,9 @@ tracking (Supabase Postgres).
    `0004_profile_settings.sql` (exercise preview toggle), then
    `0005_bonus_video_sources_multi.sql` (choose one or more bonus video sources:
    custom clips, raccoons, bunnies), then `0006_googoo_high_score.sql` (Googoo
-   game personal best).
+   game personal best), then `0007_googoo_timing_settings.sql` (Googoo freeze
+   length + gap between freezes), then `0008_googoo_word.sql` (Googoo trigger
+   word).
 2. **Environment**: copy `.env.example` to `.env` and fill in `SUPABASE_URL`,
    `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (Project Settings → API Keys).
 
@@ -69,15 +71,15 @@ images on a special rep). Filenames are never hard-coded in app logic.
 
 The bottom parade picture doubles as the **Googoo game** and runs for the
 whole workout: every so often it freezes wherever it happens to be (not just
-mid-screen), highlighted with a glowing border, and waits ~2 seconds for
-"Bingo!" before moving again. Freezing (instead of scoring on the fly) is
-what makes this playable with the Web Speech API — recognition can lag a
-second behind, but as long as "Bingo!" is heard sometime during (or just
-after) the freeze, the point still counts. Freeze length and how often
-freezes happen are tunable under Settings (saved on this device). Local
-voice-activity detection gives instant "heard you" feedback, while the
-transcript confirms the specific word; it silently does nothing on
-browsers without speech recognition support.
+mid-screen), highlighted with a glowing border, and waits ~2 seconds for the
+configured trigger word (default "Bingo!") before moving again. Freezing
+(instead of scoring on the fly) is what makes this playable with the Web
+Speech API — recognition can lag a second behind, but as long as the word is
+heard sometime during (or just after) the freeze, the point still counts.
+Freeze length, how often freezes happen, and the trigger word are tunable
+under Settings (saved on the profile). Local voice-activity detection gives
+instant "heard you" feedback, while the transcript confirms the specific
+word; it silently does nothing on browsers without speech recognition support.
 Points accumulate for the session and reset next session; the best single
 session is shown at the end and tracked historically (`googoo_high_score`),
 alongside the Catch Gabby high score on the home screen.

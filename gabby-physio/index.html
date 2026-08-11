@@ -1213,6 +1213,41 @@
   }
   .settings-sublabel + .settings-stepper { margin-top: 2px; }
   .settings-stepper + .settings-sublabel { margin-top: 12px; }
+  .settings-word-row {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    margin-top: 2px;
+  }
+  .settings-word-row input {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: var(--touch-min);
+    padding: 10px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.28);
+    background: rgba(0,0,0,0.22);
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+  .settings-word-row input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .settings-word-row button {
+    flex: 0 0 auto;
+    min-height: var(--touch-min);
+    padding: 10px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(34, 197, 94, 0.28);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 800;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
   .settings-toggle {
     align-self: flex-start;
     min-width: 88px;
@@ -1679,7 +1714,12 @@
     </div>
     <div class="settings-card">
       <div class="section-label">Googoo game</div>
-      <p class="settings-hint">How long the animal freezes and waits for “Bingo!”, and about how often those freezes happen. Longer freezes help if speech recognition feels slow.</p>
+      <p class="settings-hint" id="googoo-settings-hint">When the animal freezes, say the trigger word to score. Longer freezes help if speech recognition feels slow.</p>
+      <div class="settings-sublabel">Trigger word</div>
+      <div class="settings-word-row">
+        <input id="googoo-word-input" type="text" maxlength="24" autocomplete="off" spellcheck="false" aria-label="Googoo trigger word" placeholder="bingo">
+        <button type="button" id="btn-googoo-word-save">Save</button>
+      </div>
       <div class="settings-sublabel">Freeze length</div>
       <div class="settings-stepper" role="group" aria-label="Googoo freeze length">
         <button id="btn-googoo-pause-minus" type="button" aria-label="Shorter freeze">−</button>
@@ -1852,8 +1892,16 @@ function applyUserSettings(user) {
   if (!user) return;
   skipExercisePreview = !!user.skipExercisePreview;
   bonusVideoSources = normalizeBonusVideoSources(user.bonusVideoSources);
+  googooPauseMs = clampGoogooPauseMs(
+    user.googooPauseMs == null ? GOOGOO_PAUSE_DEFAULT_MS : user.googooPauseMs
+  );
+  googooGapMs = clampGoogooGapMs(
+    user.googooGapMs == null ? GOOGOO_GAP_DEFAULT_MS : user.googooGapMs
+  );
+  googooWord = normalizeGoogooWord(user.googooWord);
   syncPreviewToggle();
   syncBonusVideoSourceChoice();
+  syncGoogooTimingSettings();
 }
 
 /** Push one-time localStorage prefs into the profile when DB still has defaults. */
@@ -2458,11 +2506,10 @@ function syncGabbyPong() {
  * scoring on the fly) is what makes this work with speech recognition's few-hundred-ms-
  * to-a-second lag: there's no need to catch the word in real time, just sometime during
  * the freeze, so slow transcription no longer costs points.
- * Freeze length + gap between freezes are tunable in Settings (localStorage). */
-const GOOGOO_PAUSE_MS_KEY = 'gabby-physio-googoo-pause-ms';
-const GOOGOO_GAP_MS_KEY = 'gabby-physio-googoo-gap-ms';
+ * Freeze length + gap between freezes are tunable in Settings (saved on the profile). */
 const GOOGOO_PAUSE_DEFAULT_MS = 2200;
 const GOOGOO_GAP_DEFAULT_MS = 6500; // typical gap; actual waits jitter ~±30% around this
+const GOOGOO_WORD_DEFAULT = 'bingo';
 const GOOGOO_PAUSE_MIN_MS = 1000;
 const GOOGOO_PAUSE_MAX_MS = 5000;
 const GOOGOO_PAUSE_STEP_MS = 200;
@@ -2484,14 +2531,18 @@ function clampGoogooGapMs(ms) {
 
 let googooPauseMs = GOOGOO_PAUSE_DEFAULT_MS;
 let googooGapMs = GOOGOO_GAP_DEFAULT_MS;
-try {
-  const p = parseInt(localStorage.getItem(GOOGOO_PAUSE_MS_KEY), 10);
-  if (Number.isFinite(p)) googooPauseMs = clampGoogooPauseMs(p);
-} catch (_) {}
-try {
-  const g = parseInt(localStorage.getItem(GOOGOO_GAP_MS_KEY), 10);
-  if (Number.isFinite(g)) googooGapMs = clampGoogooGapMs(g);
-} catch (_) {}
+let googooWord = GOOGOO_WORD_DEFAULT;
+
+function normalizeGoogooWord(word) {
+  const clean = String(word || '').trim().toLowerCase().replace(/[^a-z]/g, '');
+  return clean.length >= 2 && clean.length <= 24 ? clean : GOOGOO_WORD_DEFAULT;
+}
+
+/** Display form for prompts: "bingo" → "Bingo". */
+function googooWordLabel(word = googooWord) {
+  const w = normalizeGoogooWord(word);
+  return w.charAt(0).toUpperCase() + w.slice(1);
+}
 
 function formatGoogooSeconds(ms) {
   const s = ms / 1000;
@@ -2501,31 +2552,81 @@ function formatGoogooSeconds(ms) {
 function syncGoogooTimingSettings() {
   const pauseEl = $('googoo-pause-num');
   const gapEl = $('googoo-gap-num');
+  const wordEl = $('googoo-word-input');
+  const hintEl = $('googoo-settings-hint');
   if (pauseEl) pauseEl.textContent = formatGoogooSeconds(googooPauseMs);
   if (gapEl) gapEl.textContent = '~' + formatGoogooSeconds(googooGapMs);
+  if (wordEl && document.activeElement !== wordEl) wordEl.value = googooWord;
+  if (hintEl) {
+    hintEl.textContent = `When the animal freezes, say “${googooWordLabel()}” to score. Longer freezes help if speech recognition feels slow.`;
+  }
 }
 
-function changeGoogooPause(deltaSteps) {
+async function changeGoogooPause(deltaSteps) {
+  if (!ME) return;
   const next = clampGoogooPauseMs(googooPauseMs + deltaSteps * GOOGOO_PAUSE_STEP_MS);
   if (next === googooPauseMs) return;
+  const prev = googooPauseMs;
   googooPauseMs = next;
-  try { localStorage.setItem(GOOGOO_PAUSE_MS_KEY, String(googooPauseMs)); } catch (_) {}
   syncGoogooTimingSettings();
+  try {
+    const data = await api('PATCH', '/api/me', { googooPauseMs: next });
+    ME.user = data.user;
+    applyUserSettings(ME.user);
+  } catch (_) {
+    googooPauseMs = prev;
+    syncGoogooTimingSettings();
+  }
 }
 
-function changeGoogooGap(deltaSteps) {
+async function changeGoogooGap(deltaSteps) {
+  if (!ME) return;
   const next = clampGoogooGapMs(googooGapMs + deltaSteps * GOOGOO_GAP_STEP_MS);
   if (next === googooGapMs) return;
+  const prev = googooGapMs;
   googooGapMs = next;
-  try { localStorage.setItem(GOOGOO_GAP_MS_KEY, String(googooGapMs)); } catch (_) {}
   syncGoogooTimingSettings();
+  try {
+    const data = await api('PATCH', '/api/me', { googooGapMs: next });
+    ME.user = data.user;
+    applyUserSettings(ME.user);
+  } catch (_) {
+    googooGapMs = prev;
+    syncGoogooTimingSettings();
+  }
 }
 
-/** Only this one clear, distinct word counts — not any sound. Small allowance
- *  for speech-recognition quirks (a drawn-out "bingoo") but nothing else. */
+async function saveGoogooWord() {
+  if (!ME) return;
+  const input = $('googoo-word-input');
+  const next = normalizeGoogooWord(input && input.value);
+  if (input) input.value = next;
+  if (next === googooWord) {
+    syncGoogooTimingSettings();
+    return;
+  }
+  const prev = googooWord;
+  googooWord = next;
+  syncGoogooTimingSettings();
+  try {
+    const data = await api('PATCH', '/api/me', { googooWord: next });
+    ME.user = data.user;
+    applyUserSettings(ME.user);
+  } catch (_) {
+    googooWord = prev;
+    syncGoogooTimingSettings();
+  }
+}
+
+/** Match the configured trigger word in a transcript. Allows a drawn-out last
+ *  letter (e.g. "bingo" / "bingoo") but nothing else. */
 function matchesGoogoo(text) {
+  const word = normalizeGoogooWord(googooWord);
   const t = ` ${String(text || '').toLowerCase().replace(/[^a-z]+/g, ' ')} `;
-  return /\bbingo+\b/.test(t);
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const stem = esc(word.slice(0, -1));
+  const last = esc(word.slice(-1));
+  return new RegExp(`\\b${stem}${last}+\\b`).test(t);
 }
 
 /** Quick localized sparkle burst at (x, y) — the "point scored" celebration. */
@@ -2616,10 +2717,10 @@ function updateGoogooMicStatus() {
     }
     if (googooGame.lastSoundAt && now - googooGame.lastSoundAt < GOOGOO_SOUND_DISPLAY_MS) {
       el.classList.add('heard');
-      el.textContent = '🔊 Heard you — say "Bingo!"';
+      el.textContent = `🔊 Heard you — say "${googooWordLabel()}"`;
       return;
     }
-    el.textContent = '🐣 Say "Bingo!" now!';
+    el.textContent = `🐣 Say "${googooWordLabel()}" now!`;
     return;
   }
 
@@ -6091,6 +6192,13 @@ $('btn-googoo-pause-minus').addEventListener('click', () => changeGoogooPause(-1
 $('btn-googoo-pause-plus').addEventListener('click', () => changeGoogooPause(1));
 $('btn-googoo-gap-minus').addEventListener('click', () => changeGoogooGap(-1));
 $('btn-googoo-gap-plus').addEventListener('click', () => changeGoogooGap(1));
+$('btn-googoo-word-save').addEventListener('click', () => saveGoogooWord());
+$('googoo-word-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    saveGoogooWord();
+  }
+});
 $('btn-toggle-preview').addEventListener('click', toggleExercisePreview);
 document.querySelectorAll('.settings-choice[data-bonus-source]').forEach((btn) => {
   btn.addEventListener('click', () => toggleBonusVideoSource(btn.dataset.bonusSource));

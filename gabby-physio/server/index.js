@@ -40,12 +40,19 @@ function defaultSchemeConfig() {
 }
 
 const BONUS_VIDEO_SOURCE_VALUES = ['custom', 'raccoon', 'bunny'];
+const GOOGOO_WORD_DEFAULT = 'bingo';
 
 function normalizeBonusVideoSources(list) {
   const clean = Array.isArray(list)
     ? [...new Set(list.filter((s) => BONUS_VIDEO_SOURCE_VALUES.includes(s)))]
     : [];
   return clean.length ? clean : ['custom'];
+}
+
+/** Lowercase letters only, 2–24 chars. Falls back to the default trigger word. */
+function normalizeGoogooWord(word) {
+  const clean = String(word || '').trim().toLowerCase().replace(/[^a-z]/g, '');
+  return clean.length >= 2 && clean.length <= 24 ? clean : GOOGOO_WORD_DEFAULT;
 }
 
 function publicUser(profile) {
@@ -59,6 +66,9 @@ function publicUser(profile) {
     googooHighScore: profile.googoo_high_score || 0,
     skipExercisePreview: !!profile.skip_exercise_preview,
     bonusVideoSources: normalizeBonusVideoSources(profile.bonus_video_sources),
+    googooPauseMs: profile.googoo_pause_ms == null ? 2200 : profile.googoo_pause_ms,
+    googooGapMs: profile.googoo_gap_ms == null ? 6500 : profile.googoo_gap_ms,
+    googooWord: normalizeGoogooWord(profile.googoo_word),
   };
 }
 
@@ -252,7 +262,15 @@ app.get('/api/me', requireAuth, wrap(async (req, res) => {
 }));
 
 app.patch('/api/me', requireAuth, wrap(async (req, res) => {
-  const { dailyGoal, displayName, skipExercisePreview, bonusVideoSources } = req.body || {};
+  const {
+    dailyGoal,
+    displayName,
+    skipExercisePreview,
+    bonusVideoSources,
+    googooPauseMs,
+    googooGapMs,
+    googooWord,
+  } = req.body || {};
   const patch = {};
   if (dailyGoal !== undefined) {
     const goal = parseInt(dailyGoal, 10);
@@ -278,6 +296,29 @@ app.patch('/api/me', requireAuth, wrap(async (req, res) => {
       });
     }
     patch.bonus_video_sources = normalizeBonusVideoSources(bonusVideoSources);
+  }
+  if (googooPauseMs !== undefined) {
+    const pause = parseInt(googooPauseMs, 10);
+    if (!(Number.isFinite(pause) && pause >= 1000 && pause <= 5000)) {
+      return res.status(400).json({ error: 'googooPauseMs must be between 1000 and 5000' });
+    }
+    patch.googoo_pause_ms = pause;
+  }
+  if (googooGapMs !== undefined) {
+    const gap = parseInt(googooGapMs, 10);
+    if (!(Number.isFinite(gap) && gap >= 3000 && gap <= 15000)) {
+      return res.status(400).json({ error: 'googooGapMs must be between 3000 and 15000' });
+    }
+    patch.googoo_gap_ms = gap;
+  }
+  if (googooWord !== undefined) {
+    const cleaned = String(googooWord || '').trim().toLowerCase().replace(/[^a-z]/g, '');
+    if (!(cleaned.length >= 2 && cleaned.length <= 24)) {
+      return res.status(400).json({
+        error: 'googooWord must be 2–24 letters (a–z)',
+      });
+    }
+    patch.googoo_word = cleaned;
   }
   if (!Object.keys(patch).length) {
     return res.status(400).json({ error: 'No valid fields to update' });
