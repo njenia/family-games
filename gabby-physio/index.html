@@ -1188,6 +1188,31 @@
     font-size: 0.95rem;
     color: rgba(255,255,255,0.85);
   }
+  .settings-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 6px;
+    font-size: 0.95rem;
+    color: rgba(255,255,255,0.85);
+  }
+  .settings-stepper .stepper-value {
+    min-width: 4.5ch;
+    text-align: center;
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #fff;
+  }
+  .settings-sublabel {
+    margin-top: 4px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.85);
+  }
+  .settings-sublabel + .settings-stepper { margin-top: 2px; }
+  .settings-stepper + .settings-sublabel { margin-top: 12px; }
   .settings-toggle {
     align-self: flex-start;
     min-width: 88px;
@@ -1231,7 +1256,8 @@
     background: rgba(34, 197, 94, 0.28);
     color: #fff;
   }
-  #goal-row button {
+  #goal-row button,
+  .settings-stepper button {
     width: var(--touch-min);
     height: var(--touch-min);
     border-radius: 50%;
@@ -1243,8 +1269,10 @@
     cursor: pointer;
     line-height: 1;
   }
-  #goal-row button:hover { background: rgba(255,255,255,0.25); }
-  #goal-row button:active { background: rgba(255,255,255,0.32); }
+  #goal-row button:hover,
+  .settings-stepper button:hover { background: rgba(255,255,255,0.25); }
+  #goal-row button:active,
+  .settings-stepper button:active { background: rgba(255,255,255,0.32); }
   #goal-num {
     font-size: 1.35rem;
     font-weight: 800;
@@ -1647,6 +1675,22 @@
         <button type="button" class="settings-choice" data-bonus-source="custom" aria-pressed="true">Custom</button>
         <button type="button" class="settings-choice" data-bonus-source="raccoon" aria-pressed="false">Raccoons</button>
         <button type="button" class="settings-choice" data-bonus-source="bunny" aria-pressed="false">Bunnies</button>
+      </div>
+    </div>
+    <div class="settings-card">
+      <div class="section-label">Googoo game</div>
+      <p class="settings-hint">How long the animal freezes and waits for “Bingo!”, and about how often those freezes happen. Longer freezes help if speech recognition feels slow.</p>
+      <div class="settings-sublabel">Freeze length</div>
+      <div class="settings-stepper" role="group" aria-label="Googoo freeze length">
+        <button id="btn-googoo-pause-minus" type="button" aria-label="Shorter freeze">−</button>
+        <span class="stepper-value" id="googoo-pause-num">2.2s</span>
+        <button id="btn-googoo-pause-plus" type="button" aria-label="Longer freeze">+</button>
+      </div>
+      <div class="settings-sublabel">Time between freezes</div>
+      <div class="settings-stepper" role="group" aria-label="Googoo time between freezes">
+        <button id="btn-googoo-gap-minus" type="button" aria-label="More frequent freezes">−</button>
+        <span class="stepper-value" id="googoo-gap-num">~6.5s</span>
+        <button id="btn-googoo-gap-plus" type="button" aria-label="Less frequent freezes">+</button>
       </div>
     </div>
   </section>
@@ -2391,18 +2435,10 @@ const gabbyPong = {
   },
 };
 
-/** Pick Gabby's bounce rep + up to 2 moving-animal (Googoo) rounds on other reps. */
-function pickSpecialReps(reps) {
+/** Pick which rep Gabby's bounce round happens on. */
+function pickGabbyRep(reps) {
   const n = Math.max(1, reps | 0);
-  const indices = Array.from({ length: n }, (_, i) => i);
-  for (let i = indices.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [indices[i], indices[j]] = [indices[j], indices[i]];
-  }
-  const gabby = indices[0];
-  // Prefer different reps from Gabby's; take up to 2 for the animal parade
-  const graphics = indices.slice(1, Math.min(3, indices.length));
-  return { gabby, graphics };
+  return Math.floor(Math.random() * n);
 }
 
 function syncGabbyPong() {
@@ -2416,11 +2452,74 @@ function syncGabbyPong() {
   else gabbyPong.stop();
 }
 
-/* ---------- Googoo game: say "Bingo!" while the bottom parade picture is near center ---------- */
-const GOOGOO_ZONE_FRACTION = 0.22; // "give or take" tolerance around screen center, as a fraction of width
-const GOOGOO_ZONE_MIN_PX = 90;     // minimum half-width of the center zone, for small screens
-const GOOGOO_HEAR_WINDOW_MS = 2200; // how recently "Bingo!" must have been heard to still count
-const GOOGOO_SOUND_DISPLAY_MS = 900; // how long "heard you" / a transcript stays on the mic status pill
+/* ---------- Googoo game: the bottom parade picture runs the whole workout and ----------
+ * periodically freezes — anywhere along its path, not just the middle — glowing and
+ * waiting a couple seconds for "Bingo!" before moving again. Freezing it (instead of
+ * scoring on the fly) is what makes this work with speech recognition's few-hundred-ms-
+ * to-a-second lag: there's no need to catch the word in real time, just sometime during
+ * the freeze, so slow transcription no longer costs points.
+ * Freeze length + gap between freezes are tunable in Settings (localStorage). */
+const GOOGOO_PAUSE_MS_KEY = 'gabby-physio-googoo-pause-ms';
+const GOOGOO_GAP_MS_KEY = 'gabby-physio-googoo-gap-ms';
+const GOOGOO_PAUSE_DEFAULT_MS = 2200;
+const GOOGOO_GAP_DEFAULT_MS = 6500; // typical gap; actual waits jitter ~±30% around this
+const GOOGOO_PAUSE_MIN_MS = 1000;
+const GOOGOO_PAUSE_MAX_MS = 5000;
+const GOOGOO_PAUSE_STEP_MS = 200;
+const GOOGOO_GAP_MIN_MS = 3000;
+const GOOGOO_GAP_MAX_MS = 15000;
+const GOOGOO_GAP_STEP_MS = 500;
+const GOOGOO_LISTEN_GRACE_MS = 1000;   // extra time after it un-freezes where a late-arriving transcript still counts
+const GOOGOO_MATCH_STALE_MS = 1500;    // safety cutoff: a "match" older than this is too stale to score off of
+const GOOGOO_SOUND_DISPLAY_MS = 900;   // how long "heard you" / a transcript stays on the mic status pill
+
+function clampGoogooPauseMs(ms) {
+  const n = Math.round(Number(ms) / GOOGOO_PAUSE_STEP_MS) * GOOGOO_PAUSE_STEP_MS;
+  return Math.min(GOOGOO_PAUSE_MAX_MS, Math.max(GOOGOO_PAUSE_MIN_MS, n));
+}
+function clampGoogooGapMs(ms) {
+  const n = Math.round(Number(ms) / GOOGOO_GAP_STEP_MS) * GOOGOO_GAP_STEP_MS;
+  return Math.min(GOOGOO_GAP_MAX_MS, Math.max(GOOGOO_GAP_MIN_MS, n));
+}
+
+let googooPauseMs = GOOGOO_PAUSE_DEFAULT_MS;
+let googooGapMs = GOOGOO_GAP_DEFAULT_MS;
+try {
+  const p = parseInt(localStorage.getItem(GOOGOO_PAUSE_MS_KEY), 10);
+  if (Number.isFinite(p)) googooPauseMs = clampGoogooPauseMs(p);
+} catch (_) {}
+try {
+  const g = parseInt(localStorage.getItem(GOOGOO_GAP_MS_KEY), 10);
+  if (Number.isFinite(g)) googooGapMs = clampGoogooGapMs(g);
+} catch (_) {}
+
+function formatGoogooSeconds(ms) {
+  const s = ms / 1000;
+  return (Number.isInteger(s) ? String(s) : s.toFixed(1)) + 's';
+}
+
+function syncGoogooTimingSettings() {
+  const pauseEl = $('googoo-pause-num');
+  const gapEl = $('googoo-gap-num');
+  if (pauseEl) pauseEl.textContent = formatGoogooSeconds(googooPauseMs);
+  if (gapEl) gapEl.textContent = '~' + formatGoogooSeconds(googooGapMs);
+}
+
+function changeGoogooPause(deltaSteps) {
+  const next = clampGoogooPauseMs(googooPauseMs + deltaSteps * GOOGOO_PAUSE_STEP_MS);
+  if (next === googooPauseMs) return;
+  googooPauseMs = next;
+  try { localStorage.setItem(GOOGOO_PAUSE_MS_KEY, String(googooPauseMs)); } catch (_) {}
+  syncGoogooTimingSettings();
+}
+
+function changeGoogooGap(deltaSteps) {
+  const next = clampGoogooGapMs(googooGapMs + deltaSteps * GOOGOO_GAP_STEP_MS);
+  if (next === googooGapMs) return;
+  googooGapMs = next;
+  try { localStorage.setItem(GOOGOO_GAP_MS_KEY, String(googooGapMs)); } catch (_) {}
+  syncGoogooTimingSettings();
+}
 
 /** Only this one clear, distinct word counts — not any sound. Small allowance
  *  for speech-recognition quirks (a drawn-out "bingoo") but nothing else. */
@@ -2505,29 +2604,34 @@ function updateGoogooMicStatus() {
     el.textContent = '🎉 Point!';
     return;
   }
-  const heardTranscript = googooGame.lastTranscript
-    && (now - googooGame.lastTranscriptAt < GOOGOO_SOUND_DISPLAY_MS);
-  if (heardTranscript) {
-    el.classList.add('heard');
-    if (googooGame.lastMatched) el.classList.add('matched');
-    el.textContent = `🎤 Heard: "${googooGame.lastTranscript}"`;
-    return;
-  }
-  if (googooGame.lastSoundAt && now - googooGame.lastSoundAt < GOOGOO_SOUND_DISPLAY_MS) {
-    el.classList.add('heard');
-    el.textContent = '🔊 Heard you — say "Bingo!"';
+
+  if (repParade.waiting) {
+    const heardTranscript = googooGame.lastTranscript
+      && (now - googooGame.lastTranscriptAt < GOOGOO_SOUND_DISPLAY_MS);
+    if (heardTranscript) {
+      el.classList.add('heard');
+      if (googooGame.lastMatched) el.classList.add('matched');
+      el.textContent = `🎤 Heard: "${googooGame.lastTranscript}"`;
+      return;
+    }
+    if (googooGame.lastSoundAt && now - googooGame.lastSoundAt < GOOGOO_SOUND_DISPLAY_MS) {
+      el.classList.add('heard');
+      el.textContent = '🔊 Heard you — say "Bingo!"';
+      return;
+    }
+    el.textContent = '🐣 Say "Bingo!" now!';
     return;
   }
 
   if (googooGame.starting) el.textContent = '🎤 Turning on the microphone…';
-  else if (googooGame.listening) el.textContent = '🎤 Listening for "Bingo!"…';
+  else if (googooGame.listening) el.textContent = '🎤 Watch for the glow…';
   else if (state.paused) el.textContent = '🎤 Paused';
   else el.textContent = '🎤 Microphone off';
 }
 
 /** Wraps the Web Speech API to listen specifically for "Bingo!" — one clear,
  *  distinct word, not just any sound — and award a point when heard while the
- *  rep-parade picture is near the middle of the screen. Degrades to a no-op
+ *  rep-parade picture is frozen (see `repParade`). Degrades to a no-op
  *  (no crash, no points) on browsers without speech recognition support. */
 const googooGame = {
   SpeechRecognitionImpl: window.SpeechRecognition || window.webkitSpeechRecognition || null,
@@ -2543,8 +2647,9 @@ const googooGame = {
   lastMatched: false,
   lastScoredAt: 0,
   matchConsumed: false, // true once the current spoken word has already scored a point
-  inZone: false,
-  scoredThisEntry: false,
+  awaitingBingo: false, // true while the parade picture is frozen and a point is up for grabs
+  scoredThisPause: false, // caps scoring at 1 point per freeze, even with grace-period lag
+  listenEndTimerId: 0,
   restartTimerId: 0,
   statusTimerId: 0,
 
@@ -2647,30 +2752,36 @@ const googooGame = {
     if (this.recognition && (this.listening || this.starting)) {
       try { this.recognition.stop(); } catch (_) {}
     }
+    this.cancelListenWindow();
     updateGoogooMicStatus();
   },
 
-  /** Called every animation frame the rep-parade picture is active/visible. */
-  updateZone(x, screenW) {
-    const tolerance = Math.max(GOOGOO_ZONE_MIN_PX, screenW * GOOGOO_ZONE_FRACTION);
-    const inZone = Math.abs(x - screenW / 2) <= tolerance;
-    if (inZone && !this.inZone) this.scoredThisEntry = false;
-    this.inZone = inZone;
-    $('rep-parade').classList.toggle('in-zone', inZone);
-    if (inZone) this.maybeScore();
+  /** Opens a scoring window for `durationMs` — a "Bingo!" heard any time before it
+   *  closes counts, however late the transcript arrives. Called when the parade
+   *  picture freezes; the window outlives the visible freeze by a grace period so
+   *  slow speech recognition doesn't cost a fair point. */
+  beginListenWindow(durationMs) {
+    clearTimeout(this.listenEndTimerId);
+    this.scoredThisPause = false;
+    this.matchConsumed = false;
+    this.awaitingBingo = true;
+    this.listenEndTimerId = setTimeout(() => {
+      this.awaitingBingo = false;
+      updateGoogooMicStatus();
+    }, durationMs);
   },
 
-  resetEntry() {
-    this.inZone = false;
-    this.scoredThisEntry = false;
-    $('rep-parade').classList.remove('in-zone', 'scored');
+  cancelListenWindow() {
+    clearTimeout(this.listenEndTimerId);
+    this.listenEndTimerId = 0;
+    this.awaitingBingo = false;
   },
 
   maybeScore() {
     if (this.matchConsumed) return;
-    if (!this.inZone || this.scoredThisEntry) return;
-    if (Date.now() - this.lastMatchedAt > GOOGOO_HEAR_WINDOW_MS) return;
-    this.scoredThisEntry = true;
+    if (!this.awaitingBingo || this.scoredThisPause) return;
+    if (Date.now() - this.lastMatchedAt > GOOGOO_MATCH_STALE_MS) return;
+    this.scoredThisPause = true;
     this.matchConsumed = true; // this exact spoken word is now spent — needs a fresh onspeechstart to score again
     this.lastScoredAt = Date.now();
     state.googooScore = (state.googooScore || 0) + 1;
@@ -2687,7 +2798,8 @@ const googooGame = {
 };
 
 function shouldListenForGoogoo() {
-  // Mic analysis only while the moving animal is visible (a Googoo round)
+  // Mic analysis runs continuously alongside the moving animal (avoids the
+  // startup lag of spinning speech recognition up fresh for every freeze)
   return googooGame.supported && state.sessionLive && !state.paused
     && !$('celebration').classList.contains('active')
     && repParade.active;
@@ -2698,7 +2810,10 @@ function syncGoogooListening() {
   else googooGame.stop();
 }
 
-/** Bottom horizontal parade — random graphic from graphics/repititions on its own special rep. */
+/** Bottom horizontal parade — random graphic from graphics/repititions, running for the
+ *  whole workout. It doubles as the Googoo game: every so often it freezes in place
+ *  (wherever it happens to be, not just the middle) and waits ~2s for "Bingo!" before
+ *  moving on again. */
 const repParade = {
   active: false,
   raf: 0,
@@ -2707,6 +2822,9 @@ const repParade = {
   vx: 0,
   w: 96,
   h: 88,
+  waiting: false,   // frozen and listening for "Bingo!" right now
+  waitUntil: 0,      // when the freeze ends and it resumes moving
+  nextPauseAt: 0,    // when the next freeze is scheduled to begin
 
   start() {
     if (this.active) return;
@@ -2738,19 +2856,48 @@ const repParade = {
     this.x = rand(this.w / 2 + 8, Math.max(this.w / 2 + 16, W() - this.w / 2 - 8));
     this.y = H() - this.h / 2 - pad - safeBottom;
     this.vx = (Math.random() < 0.5 ? -1 : 1) * rand(2.6, 4.4);
-    googooGame.resetEntry();
+    this.waiting = false;
+    el.classList.remove('in-zone', 'scored');
+    this._scheduleNextPause();
     this._draw();
     this._loop();
   },
 
   stop() {
     this.active = false;
+    this.waiting = false;
     if (this.raf) {
       cancelAnimationFrame(this.raf);
       this.raf = 0;
     }
-    googooGame.resetEntry();
-    $('rep-parade').classList.remove('active');
+    googooGame.cancelListenWindow();
+    $('rep-parade').classList.remove('active', 'in-zone', 'scored');
+  },
+
+  _scheduleNextPause() {
+    // Jitter around the tuned average so freezes don't feel metronomic.
+    const min = Math.round(googooGapMs * 0.7);
+    const max = Math.round(googooGapMs * 1.3);
+    this.nextPauseAt = Date.now() + rand(min, max);
+  },
+
+  _beginPause() {
+    this.waiting = true;
+    this.waitUntil = Date.now() + googooPauseMs;
+    $('rep-parade').classList.add('in-zone');
+    // The listen window outlives the visible freeze by a grace period, so a
+    // "Bingo!" said right at the buzzer still counts even if the transcript
+    // for it doesn't arrive until after the picture is moving again.
+    googooGame.beginListenWindow(googooPauseMs + GOOGOO_LISTEN_GRACE_MS);
+    updateGoogooMicStatus();
+  },
+
+  _endPause() {
+    this.waiting = false;
+    $('rep-parade').classList.remove('in-zone');
+    this.vx = (this.vx < 0 ? -1 : 1) * rand(2.6, 4.4);
+    this._scheduleNextPause();
+    updateGoogooMicStatus();
   },
 
   _draw() {
@@ -2767,24 +2914,33 @@ const repParade = {
     const pad = Math.max(12, Math.round(this.h * 0.14));
     const safeBottom = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bottom')) || 0;
     this.y = H() - this.h / 2 - pad - safeBottom;
+
+    if (this.waiting) {
+      if (Date.now() >= this.waitUntil) this._endPause();
+      this._draw();
+      return;
+    }
+
+    if (Date.now() >= this.nextPauseAt) {
+      this._beginPause();
+      this._draw();
+      return;
+    }
+
     this.x += this.vx;
     const half = this.w / 2;
     if (this.x <= half) { this.x = half; this.vx = Math.abs(this.vx); }
     else if (this.x >= W() - half) { this.x = W() - half; this.vx = -Math.abs(this.vx); }
 
     this._draw();
-    googooGame.updateZone(this.x, W());
   },
 };
 
 function syncRepParade() {
-  const onGraphicRep = Array.isArray(state.graphicReps)
-    && state.graphicReps.includes(state.rep);
   const activeWork =
     screens.workout.classList.contains('active') &&
     !state.between &&
     !$('celebration').classList.contains('active') &&
-    onGraphicRep &&
     state.phase !== 'rest';
   if (activeWork) repParade.start();
   else repParade.stop();
@@ -4452,7 +4608,6 @@ const state = {
   lastBonusIndex: -1,
   lastBunnyIndex: -1,
   gabbyRep: 0,
-  graphicReps: [], // up to 2 moving-animal (Googoo) rounds per exercise
   googooScore: 0,
   // server session tracking
   sessionId: null,
@@ -4740,11 +4895,7 @@ function reportProgress() {
 function startTimedExercise(ex) {
   const t = resolveTiming(ex);
   state.rep = 0;
-  {
-    const special = pickSpecialReps(t.reps);
-    state.gabbyRep = special.gabby;
-    state.graphicReps = special.graphics;
-  }
+  state.gabbyRep = pickGabbyRep(t.reps);
   state.phase = 'work';
   state.secondsLeft = t.workSeconds;
   state.phaseTotal = t.workSeconds;
@@ -4829,11 +4980,7 @@ function tickTimed() {
 function startDualExercise(ex) {
   const t = resolveTiming(ex);
   state.rep = 0;
-  {
-    const special = pickSpecialReps(t.reps);
-    state.gabbyRep = special.gabby;
-    state.graphicReps = special.graphics;
-  }
+  state.gabbyRep = pickGabbyRep(t.reps);
   state.phase = 'hold';
   state.phaseIndex = 0;
   const first = ex.phases[0];
@@ -5940,6 +6087,10 @@ async function changeGoal(delta) {
 }
 $('btn-goal-minus').addEventListener('click', () => changeGoal(-1));
 $('btn-goal-plus').addEventListener('click', () => changeGoal(1));
+$('btn-googoo-pause-minus').addEventListener('click', () => changeGoogooPause(-1));
+$('btn-googoo-pause-plus').addEventListener('click', () => changeGoogooPause(1));
+$('btn-googoo-gap-minus').addEventListener('click', () => changeGoogooGap(-1));
+$('btn-googoo-gap-plus').addEventListener('click', () => changeGoogooGap(1));
 $('btn-toggle-preview').addEventListener('click', toggleExercisePreview);
 document.querySelectorAll('.settings-choice[data-bonus-source]').forEach((btn) => {
   btn.addEventListener('click', () => toggleBonusVideoSource(btn.dataset.bonusSource));
@@ -6005,6 +6156,7 @@ function showSettings() {
   leaveSessionScreen();
   $('goal-num').textContent = ME.user.dailyGoal;
   applyUserSettings(ME.user);
+  syncGoogooTimingSettings();
   showScreen('settings');
 }
 

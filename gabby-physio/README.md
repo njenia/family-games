@@ -67,11 +67,16 @@ Defined in `supabase/migrations/0001_init.sql`:
 `repetition-graphics.js` from `graphics/repititions/` (random bottom parade
 images on a special rep). Filenames are never hard-coded in app logic.
 
-The bottom parade picture doubles as the **Googoo game**, appearing on up to
-2 reps per exercise: while it's on screen (highlighted with a glowing border),
-saying "Bingo!" scores a point. It uses the Web Speech API — local
+The bottom parade picture doubles as the **Googoo game** and runs for the
+whole workout: every so often it freezes wherever it happens to be (not just
+mid-screen), highlighted with a glowing border, and waits ~2 seconds for
+"Bingo!" before moving again. Freezing (instead of scoring on the fly) is
+what makes this playable with the Web Speech API — recognition can lag a
+second behind, but as long as "Bingo!" is heard sometime during (or just
+after) the freeze, the point still counts. Freeze length and how often
+freezes happen are tunable under Settings (saved on this device). Local
 voice-activity detection gives instant "heard you" feedback, while the
-transcript confirms the specific word — and silently does nothing on
+transcript confirms the specific word; it silently does nothing on
 browsers without speech recognition support.
 Points accumulate for the session and reset next session; the best single
 session is shown at the end and tracked historically (`googoo_high_score`),
