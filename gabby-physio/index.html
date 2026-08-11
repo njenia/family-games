@@ -2895,6 +2895,7 @@ const googooGame = {
     const rect = el.getBoundingClientRect();
     googooPointBurst(rect.left + rect.width / 2, rect.top + rect.height / 2);
     if (!soundMuted) sounds.googoo();
+    repParade.changeAnimal();
   },
 };
 
@@ -2973,6 +2974,29 @@ const repParade = {
     }
     googooGame.cancelListenWindow();
     $('rep-parade').classList.remove('active', 'in-zone', 'scored');
+  },
+
+  /** Swap to a different repetition graphic (called after each scored point). */
+  changeAnimal() {
+    if (!this.active || !REPETITION_GRAPHICS.length) return;
+    const el = $('rep-parade');
+    const current = el.dataset.path || '';
+    const pool = REPETITION_GRAPHICS.length > 1
+      ? REPETITION_GRAPHICS.filter((p) => p !== current)
+      : REPETITION_GRAPHICS;
+    const src = pick(pool);
+    if (!src || src === current) return;
+    el.dataset.path = src;
+    el.src = encodeURI(src);
+    const applySize = () => {
+      const nw = el.naturalWidth || this.h;
+      const nh = el.naturalHeight || this.h;
+      this.w = Math.max(40, Math.round(this.h * (nw / Math.max(1, nh))));
+      this.w = Math.min(this.w, Math.round(W() * 0.36));
+      this._draw();
+    };
+    if (el.complete && el.naturalWidth) applySize();
+    else el.addEventListener('load', applySize, { once: true });
   },
 
   _scheduleNextPause() {
