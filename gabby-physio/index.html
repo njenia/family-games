@@ -2542,6 +2542,7 @@ const googooGame = {
   lastTranscriptAt: 0,
   lastMatched: false,
   lastScoredAt: 0,
+  matchConsumed: false, // true once the current spoken word has already scored a point
   inZone: false,
   scoredThisEntry: false,
   restartTimerId: 0,
@@ -2560,12 +2561,16 @@ const googooGame = {
     rec.onstart = () => {
       this.starting = false;
       this.listening = true;
+      this.matchConsumed = false;
       updateGoogooMicStatus();
     };
     // Fires as soon as local voice-activity detection notices speech — near
     // instant, well before a transcript is ready — so feedback isn't stuck.
+    // A fresh speech-start also means a brand-new word is being spoken, so
+    // it's safe to listen for a match again even if the last word scored.
     rec.onspeechstart = () => {
       this.lastSoundAt = Date.now();
+      this.matchConsumed = false;
       updateGoogooMicStatus();
     };
     rec.onresult = (e) => {
@@ -2575,7 +2580,13 @@ const googooGame = {
         this.lastTranscript = transcript.trim();
         this.lastTranscriptAt = Date.now();
         this.lastMatched = matchesGoogoo(transcript);
-        if (this.lastMatched) {
+        // Interim and final results can both fire for the *same* spoken word,
+        // and results can arrive for words spoken well before the mic caught
+        // up — `matchConsumed` ensures each distinct utterance (bounded by
+        // onspeechstart) can only ever award one point, no matter how many
+        // times it's re-reported or how long the stale match would otherwise
+        // still be "recent" enough to count.
+        if (this.lastMatched && !this.matchConsumed) {
           this.lastMatchedAt = Date.now();
           this.maybeScore();
         }
@@ -2656,9 +2667,11 @@ const googooGame = {
   },
 
   maybeScore() {
+    if (this.matchConsumed) return;
     if (!this.inZone || this.scoredThisEntry) return;
     if (Date.now() - this.lastMatchedAt > GOOGOO_HEAR_WINDOW_MS) return;
     this.scoredThisEntry = true;
+    this.matchConsumed = true; // this exact spoken word is now spent — needs a fresh onspeechstart to score again
     this.lastScoredAt = Date.now();
     state.googooScore = (state.googooScore || 0) + 1;
     showGoogooToast();
