@@ -3038,12 +3038,13 @@ const repParade = {
 };
 
 function syncRepParade() {
-  const activeWork =
+  // Keep the animal running for the whole exercise — work and rest phases alike.
+  // (Still off between exercises / celebration.)
+  const active =
     screens.workout.classList.contains('active') &&
     !state.between &&
-    !$('celebration').classList.contains('active') &&
-    state.phase !== 'rest';
-  if (activeWork) repParade.start();
+    !$('celebration').classList.contains('active');
+  if (active) repParade.start();
   else repParade.stop();
 }
 
