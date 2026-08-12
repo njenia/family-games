@@ -66,20 +66,18 @@ Defined in `supabase/migrations/0001_init.sql`:
 ## Maintenance
 
 `npm run sync` regenerates `bonus-videos.js` from the bonus video folder and
-`repetition-graphics.js` from `graphics/repititions/` (random bottom parade
-images on a special rep). Filenames are never hard-coded in app logic.
+`repetition-graphics.js` from `graphics/repititions/`. Filenames are never
+hard-coded in app logic.
 
-The bottom parade picture doubles as the **Googoo game** and runs for the
-whole workout: every so often it freezes wherever it happens to be (not just
-mid-screen), highlighted with a glowing border, and waits ~2 seconds for the
-configured trigger word (default "Bingo!") before moving again. Freezing
-(instead of scoring on the fly) is what makes this playable with the Web
-Speech API — recognition can lag a second behind, but as long as the word is
-heard sometime during (or just after) the freeze, the point still counts.
-Freeze length, how often freezes happen, and the trigger word are tunable
-under Settings (saved on the profile). Local voice-activity detection gives
-instant "heard you" feedback, while the transcript confirms the specific
-word; it silently does nothing on browsers without speech recognition support.
+The in-session **Googoo game** is a Space-Invaders-style minigame: little
+Gabbys drop from the top of the screen (random horizontal start) during the
+whole exercise. Saying the configured trigger word (default "Bingo!") zaps
+one that's currently on screen for a point. Fall time (top→bottom) and how
+often new Gabbys appear are tunable under Settings (saved on the profile),
+along with the trigger word. It uses the Web Speech API — local voice-activity
+detection gives instant "heard you" feedback, while the transcript confirms
+the word — and silently does nothing on browsers without speech recognition
+support.
 Points accumulate for the session and reset next session; the best single
 session is shown at the end and tracked historically (`googoo_high_score`),
 alongside the Catch Gabby high score on the home screen.

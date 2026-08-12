@@ -356,7 +356,7 @@ app.post('/api/me/catch-gabby', requireAuth, wrap(async (req, res) => {
   });
 }));
 
-/** Submit a Googoo game score (bottom rep-parade); updates the profile only when it beats the high score. */
+/** Submit a Googoo game score (falling Gabby invaders); updates the profile only when it beats the high score. */
 app.post('/api/me/googoo', requireAuth, wrap(async (req, res) => {
   const score = parseInt(req.body && req.body.score, 10);
   if (!(Number.isFinite(score) && score >= 0 && score <= 100000)) {
