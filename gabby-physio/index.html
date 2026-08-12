@@ -2715,11 +2715,13 @@ function updateGoogooMicStatus() {
     return;
   }
 
-  if (googooGame.starting) el.textContent = '🎤 Turning on the microphone…';
-  else if (googooGame.listening) {
+  if (googooGame.starting && !googooGame.wantListening) el.textContent = '🎤 Turning on the microphone…';
+  else if (googooGame.wantListening && !googooGame.disabled) {
+    // Keep a stable "listening" message even while the browser silently
+    // restarts recognition (common on mobile after each phrase / silence).
     el.textContent = googooInvaders.aliveCount()
       ? `🎤 Say "${googooWordLabel()}" to zap!`
-      : '🎤 Watch for Gabby…';
+      : '🎤 Listening…';
   }
   else if (state.paused) el.textContent = '🎤 Paused';
   else el.textContent = '🎤 Microphone off';
@@ -2727,10 +2729,13 @@ function updateGoogooMicStatus() {
 
 /** Wraps the Web Speech API to listen for the configured trigger word and zap a
  *  falling Gabby invader when heard. Degrades to a no-op on browsers without
- *  speech recognition support. */
+ *  speech recognition support. On mobile, recognition often ends after each
+ *  phrase or stretch of silence — we keep a warm mic stream and restart
+ *  immediately so listening feels continuous. */
 const googooGame = {
   SpeechRecognitionImpl: window.SpeechRecognition || window.webkitSpeechRecognition || null,
   recognition: null,
+  micStream: null, // kept open while wantListening so the OS mic stays "on"
   wantListening: false,
   listening: false,
   starting: false,
@@ -2749,16 +2754,51 @@ const googooGame = {
     return !!this.SpeechRecognitionImpl && !this.disabled;
   },
 
+  async _ensureMic() {
+    if (this.micStream) {
+      const live = this.micStream.getTracks().some((t) => t.readyState === 'live');
+      if (live) return true;
+      this._releaseMic();
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return true;
+    try {
+      this.micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
+      return true;
+    } catch (_) {
+      // SpeechRecognition may still prompt / work without a pre-opened stream.
+      return true;
+    }
+  },
+
+  _releaseMic() {
+    if (!this.micStream) return;
+    try {
+      this.micStream.getTracks().forEach((t) => { try { t.stop(); } catch (_) {} });
+    } catch (_) {}
+    this.micStream = null;
+  },
+
   ensureRecognition() {
     if (this.recognition || !this.SpeechRecognitionImpl) return this.recognition;
     const rec = new this.SpeechRecognitionImpl();
+    // continuous is ignored on some mobile browsers; we still set it and
+    // always restart on `onend` so listening feels unbroken.
     rec.continuous = true;
     rec.interimResults = true;
+    rec.maxAlternatives = 1;
     rec.lang = 'en-US';
     rec.onstart = () => {
       this.starting = false;
       this.listening = true;
-      this.matchConsumed = false;
+      // Do NOT clear matchConsumed here — mobile restarts recognition often,
+      // and resetting would let one spoken word score again after a restart.
       updateGoogooMicStatus();
     };
     // Fires as soon as local voice-activity detection notices speech — near
@@ -2769,6 +2809,9 @@ const googooGame = {
       this.lastSoundAt = Date.now();
       this.matchConsumed = false;
       updateGoogooMicStatus();
+    };
+    rec.onspeechend = () => {
+      // Mobile often ends the whole recognition session here; onend will restart.
     };
     rec.onresult = (e) => {
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -2789,24 +2832,34 @@ const googooGame = {
     };
     rec.onerror = (e) => {
       this.starting = false;
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      const err = e && e.error;
+      if (err === 'not-allowed' || err === 'service-not-allowed') {
         this.disabled = true;
         this.wantListening = false;
+        this._releaseMic();
+        updateGoogooMicStatus();
+        return;
       }
-      // 'no-speech' / 'aborted' / transient network errors just let onend restart it.
-      updateGoogooMicStatus();
+      // no-speech / aborted / network / etc. — stay "listening" and let onend restart.
+      // Don't flash the status pill for these expected mobile churn events.
     };
     rec.onend = () => {
       this.listening = false;
       this.starting = false;
       if (this.wantListening && !this.disabled) {
-        clearTimeout(this.restartTimerId);
-        this.restartTimerId = setTimeout(() => this._start(), 250);
+        this._scheduleRestart();
       }
-      updateGoogooMicStatus();
+      // Skip status refresh on brief auto-restarts — UI uses wantListening.
     };
     this.recognition = rec;
     return rec;
+  },
+
+  _scheduleRestart() {
+    clearTimeout(this.restartTimerId);
+    // Near-immediate restart; a tiny delay avoids InvalidStateError while the
+    // previous instance is still tearing down on some mobile WebKits.
+    this.restartTimerId = setTimeout(() => this._start(), 60);
   },
 
   _start() {
@@ -2814,20 +2867,33 @@ const googooGame = {
     const rec = this.ensureRecognition();
     if (!rec) return;
     try {
-      rec.start();
       this.starting = true;
-      updateGoogooMicStatus();
+      rec.start();
     } catch (_) {
-      // Already running, or a transient failure — the onend restart timer will retry.
+      this.starting = false;
+      // Already running, or still tearing down — try again shortly.
+      if (this.wantListening && !this.disabled) this._scheduleRestart();
     }
   },
 
   start() {
-    if (!this.supported) return;
+    if (!this.SpeechRecognitionImpl || this.disabled) return;
+    const wasWanting = this.wantListening;
     this.wantListening = true;
-    this._start();
-    if (!this.statusTimerId) this.statusTimerId = setInterval(updateGoogooMicStatus, 200);
+    if (!this.statusTimerId) {
+      this.statusTimerId = setInterval(() => {
+        updateGoogooMicStatus();
+        // Watchdog: if recognition died without a clean restart, bring it back.
+        if (this.wantListening && !this.disabled && !this.listening && !this.starting) {
+          this._start();
+        }
+      }, 400);
+    }
     updateGoogooMicStatus();
+    this._ensureMic().then(() => {
+      if (!this.wantListening || this.disabled) return;
+      if (!wasWanting || (!this.listening && !this.starting)) this._start();
+    });
   },
 
   stop() {
@@ -2841,6 +2907,9 @@ const googooGame = {
     if (this.recognition && (this.listening || this.starting)) {
       try { this.recognition.stop(); } catch (_) {}
     }
+    this.listening = false;
+    this.starting = false;
+    this._releaseMic();
     updateGoogooMicStatus();
   },
 
