@@ -14,7 +14,7 @@ tracking (Supabase Postgres).
    custom clips, raccoons, bunnies), then `0006_googoo_high_score.sql` (Googoo
    game personal best), then `0007_googoo_timing_settings.sql` (Googoo freeze
    length + gap between freezes), then `0008_googoo_word.sql` (Googoo trigger
-   word).
+   word), then `0009_googoo_loudness.sql` (Googoo loud-sound threshold).
 2. **Environment**: copy `.env.example` to `.env` and fill in `SUPABASE_URL`,
    `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (Project Settings → API Keys).
 
@@ -71,13 +71,10 @@ hard-coded in app logic.
 
 The in-session **Googoo game** is a Space-Invaders-style minigame: little
 Gabbys drop from the top of the screen (random horizontal start) during the
-whole exercise. Saying the configured trigger word (default "Bingo!") zaps
-one that's currently on screen for a point. Fall time (top→bottom) and how
-often new Gabbys appear are tunable under Settings (saved on the profile),
-along with the trigger word. It uses the Web Speech API — local voice-activity
-detection gives instant "heard you" feedback, while the transcript confirms
-the word — and silently does nothing on browsers without speech recognition
-support.
+whole exercise. Making a loud sound (clap or shout) zaps one that's currently
+on screen for a point. The microphone stays open continuously via Web Audio
+(not speech recognition). Fall time, spawn interval, and how loud the sound
+must be are tunable under Settings (saved on the profile).
 Points accumulate for the session and reset next session; the best single
 session is shown at the end and tracked historically (`googoo_high_score`),
 alongside the Catch Gabby high score on the home screen.

@@ -1714,11 +1714,12 @@
     </div>
     <div class="settings-card">
       <div class="section-label">Googoo game</div>
-      <p class="settings-hint" id="googoo-settings-hint">Little Gabbys drop from the top — say the trigger word to zap one. Slower falls give speech recognition more time.</p>
-      <div class="settings-sublabel">Trigger word</div>
-      <div class="settings-word-row">
-        <input id="googoo-word-input" type="text" maxlength="24" autocomplete="off" spellcheck="false" aria-label="Googoo trigger word" placeholder="bingo">
-        <button type="button" id="btn-googoo-word-save">Save</button>
+      <p class="settings-hint" id="googoo-settings-hint">Little Gabbys drop from the top — make a loud sound (clap or shout) to zap one. The mic stays on for the whole exercise.</p>
+      <div class="settings-sublabel">Loudness needed</div>
+      <div class="settings-stepper" role="group" aria-label="Googoo loudness needed">
+        <button id="btn-googoo-loud-minus" type="button" aria-label="Quieter sounds count">−</button>
+        <span class="stepper-value" id="googoo-loud-num">5</span>
+        <button id="btn-googoo-loud-plus" type="button" aria-label="Need louder sounds">+</button>
       </div>
       <div class="settings-sublabel">Fall time (top → bottom)</div>
       <div class="settings-stepper" role="group" aria-label="Googoo fall time">
@@ -1898,7 +1899,9 @@ function applyUserSettings(user) {
   googooGapMs = clampGoogooGapMs(
     user.googooGapMs == null ? GOOGOO_GAP_DEFAULT_MS : user.googooGapMs
   );
-  googooWord = normalizeGoogooWord(user.googooWord);
+  googooLoudness = clampGoogooLoudness(
+    user.googooLoudness == null ? GOOGOO_LOUDNESS_DEFAULT : user.googooLoudness
+  );
   syncPreviewToggle();
   syncBonusVideoSourceChoice();
   syncGoogooTimingSettings();
@@ -2501,20 +2504,23 @@ function syncGabbyPong() {
 }
 
 /* ---------- Googoo game: Space-Invaders-style little Gabbys drop from the top ----------
- * during the whole exercise. Say the trigger word to zap one that's on screen.
- * googooPauseMs = how long a Gabby takes to fall top→bottom;
- * googooGapMs   = typical time between spawns (jittered ±30%). Both are tunable in Settings. */
+ * during the whole exercise. A loud sound (clap / shout) zaps one on screen.
+ * Mic stays open continuously via getUserMedia + Web Audio (no SpeechRecognition).
+ * googooPauseMs = fall time top→bottom; googooGapMs = spawn interval;
+ * googooLoudness = how loud the sound must be (1–10). */
 const GOOGOO_PAUSE_DEFAULT_MS = 2200;
 const GOOGOO_GAP_DEFAULT_MS = 6500; // typical gap; actual waits jitter ~±30% around this
-const GOOGOO_WORD_DEFAULT = 'bingo';
+const GOOGOO_LOUDNESS_DEFAULT = 5;
 const GOOGOO_PAUSE_MIN_MS = 1000;
 const GOOGOO_PAUSE_MAX_MS = 5000;
 const GOOGOO_PAUSE_STEP_MS = 200;
 const GOOGOO_GAP_MIN_MS = 3000;
 const GOOGOO_GAP_MAX_MS = 15000;
 const GOOGOO_GAP_STEP_MS = 500;
-const GOOGOO_MATCH_STALE_MS = 1800;    // how long a spoken match can still zap a Gabby that just appeared
-const GOOGOO_SOUND_DISPLAY_MS = 900;   // how long "heard you" / a transcript stays on the mic status pill
+const GOOGOO_LOUDNESS_MIN = 1;
+const GOOGOO_LOUDNESS_MAX = 10;
+const GOOGOO_SOUND_COOLDOWN_MS = 700;  // ignore further loud peaks after a trigger
+const GOOGOO_SOUND_DISPLAY_MS = 900;   // how long loud-sound feedback stays on the status pill
 
 function clampGoogooPauseMs(ms) {
   const n = Math.round(Number(ms) / GOOGOO_PAUSE_STEP_MS) * GOOGOO_PAUSE_STEP_MS;
@@ -2524,21 +2530,21 @@ function clampGoogooGapMs(ms) {
   const n = Math.round(Number(ms) / GOOGOO_GAP_STEP_MS) * GOOGOO_GAP_STEP_MS;
   return Math.min(GOOGOO_GAP_MAX_MS, Math.max(GOOGOO_GAP_MIN_MS, n));
 }
+function clampGoogooLoudness(n) {
+  const v = Math.round(Number(n));
+  if (!Number.isFinite(v)) return GOOGOO_LOUDNESS_DEFAULT;
+  return Math.min(GOOGOO_LOUDNESS_MAX, Math.max(GOOGOO_LOUDNESS_MIN, v));
+}
+
+/** Map loudness setting 1–10 → RMS threshold (higher = need a louder sound). */
+function googooLoudnessThreshold(level = googooLoudness) {
+  const L = clampGoogooLoudness(level);
+  return 0.045 + (L - 1) * 0.04;
+}
 
 let googooPauseMs = GOOGOO_PAUSE_DEFAULT_MS;
 let googooGapMs = GOOGOO_GAP_DEFAULT_MS;
-let googooWord = GOOGOO_WORD_DEFAULT;
-
-function normalizeGoogooWord(word) {
-  const clean = String(word || '').trim().toLowerCase().replace(/[^a-z]/g, '');
-  return clean.length >= 2 && clean.length <= 24 ? clean : GOOGOO_WORD_DEFAULT;
-}
-
-/** Display form for prompts: "bingo" → "Bingo". */
-function googooWordLabel(word = googooWord) {
-  const w = normalizeGoogooWord(word);
-  return w.charAt(0).toUpperCase() + w.slice(1);
-}
+let googooLoudness = GOOGOO_LOUDNESS_DEFAULT;
 
 function formatGoogooSeconds(ms) {
   const s = ms / 1000;
@@ -2548,13 +2554,13 @@ function formatGoogooSeconds(ms) {
 function syncGoogooTimingSettings() {
   const pauseEl = $('googoo-pause-num');
   const gapEl = $('googoo-gap-num');
-  const wordEl = $('googoo-word-input');
+  const loudEl = $('googoo-loud-num');
   const hintEl = $('googoo-settings-hint');
   if (pauseEl) pauseEl.textContent = formatGoogooSeconds(googooPauseMs);
   if (gapEl) gapEl.textContent = '~' + formatGoogooSeconds(googooGapMs);
-  if (wordEl && document.activeElement !== wordEl) wordEl.value = googooWord;
+  if (loudEl) loudEl.textContent = String(googooLoudness);
   if (hintEl) {
-    hintEl.textContent = `Little Gabbys drop from the top — say “${googooWordLabel()}” to zap one. Slower falls give speech recognition more time.`;
+    hintEl.textContent = 'Little Gabbys drop from the top — make a loud sound (clap or shout) to zap one. Higher loudness = you must be louder. The mic stays on for the whole exercise.';
   }
 }
 
@@ -2592,37 +2598,21 @@ async function changeGoogooGap(deltaSteps) {
   }
 }
 
-async function saveGoogooWord() {
+async function changeGoogooLoudness(deltaSteps) {
   if (!ME) return;
-  const input = $('googoo-word-input');
-  const next = normalizeGoogooWord(input && input.value);
-  if (input) input.value = next;
-  if (next === googooWord) {
-    syncGoogooTimingSettings();
-    return;
-  }
-  const prev = googooWord;
-  googooWord = next;
+  const next = clampGoogooLoudness(googooLoudness + deltaSteps);
+  if (next === googooLoudness) return;
+  const prev = googooLoudness;
+  googooLoudness = next;
   syncGoogooTimingSettings();
   try {
-    const data = await api('PATCH', '/api/me', { googooWord: next });
+    const data = await api('PATCH', '/api/me', { googooLoudness: next });
     ME.user = data.user;
     applyUserSettings(ME.user);
   } catch (_) {
-    googooWord = prev;
+    googooLoudness = prev;
     syncGoogooTimingSettings();
   }
-}
-
-/** Match the configured trigger word in a transcript. Allows a drawn-out last
- *  letter (e.g. "bingo" / "bingoo") but nothing else. */
-function matchesGoogoo(text) {
-  const word = normalizeGoogooWord(googooWord);
-  const t = ` ${String(text || '').toLowerCase().replace(/[^a-z]+/g, ' ')} `;
-  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const stem = esc(word.slice(0, -1));
-  const last = esc(word.slice(-1));
-  return new RegExp(`\\b${stem}${last}+\\b`).test(t);
 }
 
 /** Quick localized sparkle burst at (x, y) — the "point scored" celebration. */
@@ -2670,9 +2660,7 @@ function showGoogooToast() {
   el.classList.add('show');
 }
 
-/** Live mic status pill: proves the mic is actually listening. `onspeechstart`
- *  gives near-instant "heard you" feedback (local voice-activity detection),
- *  while the transcript shown afterward confirms whether it actually matched. */
+/** Live mic status: proves the mic is open and reacting to loudness. */
 function updateGoogooMicStatus() {
   const el = $('googoo-mic-status');
   if (!el) return;
@@ -2683,9 +2671,9 @@ function updateGoogooMicStatus() {
   el.classList.add('active');
   el.classList.remove('warn', 'heard', 'matched');
 
-  if (!googooGame.SpeechRecognitionImpl) {
+  if (!googooGame.canUseMic) {
     el.classList.add('warn');
-    el.textContent = '🎤 Googoo game needs a browser with voice support (try Chrome)';
+    el.textContent = '🎤 Googoo game needs microphone access';
     return;
   }
   if (googooGame.disabled) {
@@ -2700,69 +2688,66 @@ function updateGoogooMicStatus() {
     el.textContent = '🎉 Point!';
     return;
   }
-
-  const heardTranscript = googooGame.lastTranscript
-    && (now - googooGame.lastTranscriptAt < GOOGOO_SOUND_DISPLAY_MS);
-  if (heardTranscript) {
+  if (googooGame.lastMissAt && now - googooGame.lastMissAt < GOOGOO_SOUND_DISPLAY_MS) {
     el.classList.add('heard');
-    if (googooGame.lastMatched) el.classList.add('matched');
-    el.textContent = `🎤 Heard: "${googooGame.lastTranscript}"`;
+    el.textContent = '🔊 Loud sound — wait for Gabby';
     return;
   }
-  if (googooGame.lastSoundAt && now - googooGame.lastSoundAt < GOOGOO_SOUND_DISPLAY_MS) {
-    el.classList.add('heard');
-    el.textContent = `🔊 Heard you — say "${googooWordLabel()}"`;
+  if (googooGame.lastLoudAt && now - googooGame.lastLoudAt < GOOGOO_SOUND_DISPLAY_MS) {
+    el.classList.add('heard', 'matched');
+    el.textContent = '🔊 Loud sound!';
     return;
   }
 
-  if (googooGame.starting && !googooGame.wantListening) el.textContent = '🎤 Turning on the microphone…';
-  else if (googooGame.wantListening && !googooGame.disabled) {
-    // Keep a stable "listening" message even while the browser silently
-    // restarts recognition (common on mobile after each phrase / silence).
+  if (googooGame.starting) el.textContent = '🎤 Turning on the microphone…';
+  else if (googooGame.listening || googooGame.wantListening) {
+    const bars = Math.max(0, Math.min(8, Math.round(googooGame.level * 18)));
+    const meter = '▁▂▃▄▅▆▇█'.slice(0, Math.max(1, bars)) || '▁';
     el.textContent = googooInvaders.aliveCount()
-      ? `🎤 Say "${googooWordLabel()}" to zap!`
-      : '🎤 Listening…';
+      ? `🎤 ${meter} Clap/shout to zap!`
+      : `🎤 ${meter} Listening…`;
   }
   else if (state.paused) el.textContent = '🎤 Paused';
   else el.textContent = '🎤 Microphone off';
 }
 
-/** Wraps the Web Speech API to listen for the configured trigger word and zap a
- *  falling Gabby invader when heard. Degrades to a no-op on browsers without
- *  speech recognition support. On mobile, recognition often ends after each
- *  phrase or stretch of silence — we keep a warm mic stream and restart
- *  immediately so listening feels continuous. */
+/** Continuous mic + loudness detection. Keeps getUserMedia open for the whole
+ *  exercise and zaps a Gabby when volume crosses the configured threshold. */
 const googooGame = {
-  SpeechRecognitionImpl: window.SpeechRecognition || window.webkitSpeechRecognition || null,
-  recognition: null,
-  micStream: null, // kept open while wantListening so the OS mic stays "on"
+  stream: null,
+  audioCtx: null,
+  analyser: null,
+  source: null,
+  data: null,
+  raf: 0,
   wantListening: false,
   listening: false,
   starting: false,
-  disabled: false, // set once mic access is denied / unavailable, to stop retrying
-  lastSoundAt: 0,       // local voice-activity ping — instant, not word-matched
-  lastMatchedAt: 0,     // last time the transcript actually matched the trigger word
-  lastTranscript: '',
-  lastTranscriptAt: 0,
-  lastMatched: false,
+  disabled: false,
+  level: 0,
+  wasAbove: false,
+  lastLoudAt: 0,
   lastScoredAt: 0,
-  matchConsumed: false, // true once the current spoken word has already scored a point
-  restartTimerId: 0,
-  statusTimerId: 0,
+  lastMissAt: 0,
+  lastStatusAt: 0,
+  cooldownUntil: 0,
 
-  get supported() {
-    return !!this.SpeechRecognitionImpl && !this.disabled;
+  get canUseMic() {
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   },
 
-  async _ensureMic() {
-    if (this.micStream) {
-      const live = this.micStream.getTracks().some((t) => t.readyState === 'live');
+  get supported() {
+    return this.canUseMic && !this.disabled;
+  },
+
+  async _openMic() {
+    if (this.stream) {
+      const live = this.stream.getTracks().some((t) => t.readyState === 'live');
       if (live) return true;
-      this._releaseMic();
+      this._closeMic();
     }
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return true;
     try {
-      this.micStream = await navigator.mediaDevices.getUserMedia({
+      this.stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -2770,156 +2755,121 @@ const googooGame = {
         },
         video: false,
       });
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.audioCtx = this.audioCtx || new AC();
+      if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
+      this.analyser = this.audioCtx.createAnalyser();
+      this.analyser.fftSize = 1024;
+      this.analyser.smoothingTimeConstant = 0.35;
+      this.data = new Uint8Array(this.analyser.fftSize);
+      this.source = this.audioCtx.createMediaStreamSource(this.stream);
+      this.source.connect(this.analyser);
+      // Do NOT connect to destination — analyse only, never play the mic back.
       return true;
     } catch (_) {
-      // SpeechRecognition may still prompt / work without a pre-opened stream.
-      return true;
+      this.disabled = true;
+      this._closeMic();
+      return false;
     }
   },
 
-  _releaseMic() {
-    if (!this.micStream) return;
-    try {
-      this.micStream.getTracks().forEach((t) => { try { t.stop(); } catch (_) {} });
-    } catch (_) {}
-    this.micStream = null;
-  },
-
-  ensureRecognition() {
-    if (this.recognition || !this.SpeechRecognitionImpl) return this.recognition;
-    const rec = new this.SpeechRecognitionImpl();
-    // continuous is ignored on some mobile browsers; we still set it and
-    // always restart on `onend` so listening feels unbroken.
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.maxAlternatives = 1;
-    rec.lang = 'en-US';
-    rec.onstart = () => {
-      this.starting = false;
-      this.listening = true;
-      // Do NOT clear matchConsumed here — mobile restarts recognition often,
-      // and resetting would let one spoken word score again after a restart.
-      updateGoogooMicStatus();
-    };
-    // Fires as soon as local voice-activity detection notices speech — near
-    // instant, well before a transcript is ready — so feedback isn't stuck.
-    // A fresh speech-start also means a brand-new word is being spoken, so
-    // it's safe to listen for a match again even if the last word scored.
-    rec.onspeechstart = () => {
-      this.lastSoundAt = Date.now();
-      this.matchConsumed = false;
-      updateGoogooMicStatus();
-    };
-    rec.onspeechend = () => {
-      // Mobile often ends the whole recognition session here; onend will restart.
-    };
-    rec.onresult = (e) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const transcript = e.results[i][0] && e.results[i][0].transcript;
-        if (!transcript) continue;
-        this.lastTranscript = transcript.trim();
-        this.lastTranscriptAt = Date.now();
-        this.lastMatched = matchesGoogoo(transcript);
-        // Interim and final results can both fire for the *same* spoken word —
-        // `matchConsumed` ensures each distinct utterance (bounded by
-        // onspeechstart) can only ever award one point.
-        if (this.lastMatched && !this.matchConsumed) {
-          this.lastMatchedAt = Date.now();
-          this.maybeScore();
-        }
-      }
-      updateGoogooMicStatus();
-    };
-    rec.onerror = (e) => {
-      this.starting = false;
-      const err = e && e.error;
-      if (err === 'not-allowed' || err === 'service-not-allowed') {
-        this.disabled = true;
-        this.wantListening = false;
-        this._releaseMic();
-        updateGoogooMicStatus();
-        return;
-      }
-      // no-speech / aborted / network / etc. — stay "listening" and let onend restart.
-      // Don't flash the status pill for these expected mobile churn events.
-    };
-    rec.onend = () => {
-      this.listening = false;
-      this.starting = false;
-      if (this.wantListening && !this.disabled) {
-        this._scheduleRestart();
-      }
-      // Skip status refresh on brief auto-restarts — UI uses wantListening.
-    };
-    this.recognition = rec;
-    return rec;
-  },
-
-  _scheduleRestart() {
-    clearTimeout(this.restartTimerId);
-    // Near-immediate restart; a tiny delay avoids InvalidStateError while the
-    // previous instance is still tearing down on some mobile WebKits.
-    this.restartTimerId = setTimeout(() => this._start(), 60);
-  },
-
-  _start() {
-    if (!this.wantListening || this.disabled || this.listening || this.starting) return;
-    const rec = this.ensureRecognition();
-    if (!rec) return;
-    try {
-      this.starting = true;
-      rec.start();
-    } catch (_) {
-      this.starting = false;
-      // Already running, or still tearing down — try again shortly.
-      if (this.wantListening && !this.disabled) this._scheduleRestart();
+  _closeMic() {
+    if (this.raf) {
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
     }
+    try { if (this.source) this.source.disconnect(); } catch (_) {}
+    this.source = null;
+    this.analyser = null;
+    this.data = null;
+    if (this.stream) {
+      try { this.stream.getTracks().forEach((t) => { try { t.stop(); } catch (_) {} }); } catch (_) {}
+      this.stream = null;
+    }
+    if (this.audioCtx && this.audioCtx.state === 'running') {
+      try { this.audioCtx.suspend(); } catch (_) {}
+    }
+    this.listening = false;
+    this.starting = false;
+    this.level = 0;
+    this.wasAbove = false;
   },
 
-  start() {
-    if (!this.SpeechRecognitionImpl || this.disabled) return;
-    const wasWanting = this.wantListening;
+  _readLevel() {
+    if (!this.analyser || !this.data) return 0;
+    this.analyser.getByteTimeDomainData(this.data);
+    let sum = 0;
+    for (let i = 0; i < this.data.length; i++) {
+      const v = (this.data[i] - 128) / 128;
+      sum += v * v;
+    }
+    return Math.sqrt(sum / this.data.length);
+  },
+
+  _tick() {
+    if (!this.wantListening) return;
+    this.raf = requestAnimationFrame(() => this._tick());
+    if (state.paused || !this.analyser) return;
+
+    const level = this._readLevel();
+    this.level = level;
+    const threshold = googooLoudnessThreshold();
+    const above = level >= threshold;
+    const now = Date.now();
+
+    // Rising edge: crossed from quiet → loud, and not in cooldown.
+    if (above && !this.wasAbove && now >= this.cooldownUntil) {
+      this.lastLoudAt = now;
+      this.cooldownUntil = now + GOOGOO_SOUND_COOLDOWN_MS;
+      this.maybeScore();
+      updateGoogooMicStatus();
+    } else if (now - this.lastStatusAt > 120) {
+      this.lastStatusAt = now;
+      updateGoogooMicStatus();
+    }
+    this.wasAbove = above;
+  },
+
+  async start() {
+    if (!this.canUseMic || this.disabled) return;
+    if (this.wantListening && this.listening) return;
     this.wantListening = true;
-    if (!this.statusTimerId) {
-      this.statusTimerId = setInterval(() => {
-        updateGoogooMicStatus();
-        // Watchdog: if recognition died without a clean restart, bring it back.
-        if (this.wantListening && !this.disabled && !this.listening && !this.starting) {
-          this._start();
-        }
-      }, 400);
-    }
+    this.starting = true;
     updateGoogooMicStatus();
-    this._ensureMic().then(() => {
-      if (!this.wantListening || this.disabled) return;
-      if (!wasWanting || (!this.listening && !this.starting)) this._start();
-    });
+    const ok = await this._openMic();
+    if (!this.wantListening) {
+      this._closeMic();
+      return;
+    }
+    this.starting = false;
+    if (!ok) {
+      this.wantListening = false;
+      updateGoogooMicStatus();
+      return;
+    }
+    this.listening = true;
+    this.wasAbove = false;
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      try { await this.audioCtx.resume(); } catch (_) {}
+    }
+    if (!this.raf) this._tick();
+    updateGoogooMicStatus();
   },
 
   stop() {
     this.wantListening = false;
-    clearTimeout(this.restartTimerId);
-    this.restartTimerId = 0;
-    if (this.statusTimerId) {
-      clearInterval(this.statusTimerId);
-      this.statusTimerId = 0;
-    }
-    if (this.recognition && (this.listening || this.starting)) {
-      try { this.recognition.stop(); } catch (_) {}
-    }
-    this.listening = false;
-    this.starting = false;
-    this._releaseMic();
+    this._closeMic();
     updateGoogooMicStatus();
   },
 
-  /** Zap the lowest on-screen Gabby if a recent unmatched trigger word was heard. */
   maybeScore() {
-    if (this.matchConsumed) return;
-    if (Date.now() - this.lastMatchedAt > GOOGOO_MATCH_STALE_MS) return;
     const target = googooInvaders.hitOne();
-    if (!target) return;
-    this.matchConsumed = true;
+    if (!target) {
+      this.lastMissAt = Date.now();
+      updateGoogooMicStatus();
+      return;
+    }
+    this.lastMissAt = 0;
     this.lastScoredAt = Date.now();
     state.googooScore = (state.googooScore || 0) + 1;
     showGoogooToast();
@@ -2941,7 +2891,7 @@ function syncGoogooListening() {
 }
 
 /** Falling Gabby invaders — spawn on a tunable interval, drift straight down
- *  over googooPauseMs, random horizontal start. Say the trigger word to zap one. */
+ *  over googooPauseMs, random horizontal start. Clap/shout to zap one. */
 const googooInvaders = {
   active: false,
   raf: 0,
@@ -3027,8 +2977,6 @@ const googooInvaders = {
     };
     this.invaders.push(inv);
     this._drawOne(inv);
-    // A word said just before spawn can still count if it's fresh enough.
-    googooGame.maybeScore();
   },
 
   _drawOne(inv) {
@@ -3074,7 +3022,6 @@ const googooInvaders = {
       still.push(inv);
     }
     this.invaders = still;
-    googooGame.maybeScore();
   },
 };
 
@@ -6234,13 +6181,8 @@ $('btn-googoo-pause-minus').addEventListener('click', () => changeGoogooPause(-1
 $('btn-googoo-pause-plus').addEventListener('click', () => changeGoogooPause(1));
 $('btn-googoo-gap-minus').addEventListener('click', () => changeGoogooGap(-1));
 $('btn-googoo-gap-plus').addEventListener('click', () => changeGoogooGap(1));
-$('btn-googoo-word-save').addEventListener('click', () => saveGoogooWord());
-$('googoo-word-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    saveGoogooWord();
-  }
-});
+$('btn-googoo-loud-minus').addEventListener('click', () => changeGoogooLoudness(-1));
+$('btn-googoo-loud-plus').addEventListener('click', () => changeGoogooLoudness(1));
 $('btn-toggle-preview').addEventListener('click', toggleExercisePreview);
 document.querySelectorAll('.settings-choice[data-bonus-source]').forEach((btn) => {
   btn.addEventListener('click', () => toggleBonusVideoSource(btn.dataset.bonusSource));
