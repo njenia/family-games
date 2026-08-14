@@ -7,12 +7,20 @@ const { createClient } = require('@supabase/supabase-js');
 const root = path.join(__dirname, '..');
 try { process.loadEnvFile(path.join(root, '.env')); } catch (_) { /* no .env file — fine on Render */ }
 
-const { SUPABASE_URL, SUPABASE_SECRET_KEY, SUPABASE_PUBLISHABLE_KEY } = process.env;
+const {
+  SUPABASE_URL,
+  SUPABASE_SECRET_KEY,
+  SUPABASE_PUBLISHABLE_KEY,
+  GIPHY_API_KEY,
+} = process.env;
 if (!SUPABASE_URL || !SUPABASE_SECRET_KEY || !SUPABASE_PUBLISHABLE_KEY) {
   console.error('Missing environment variables. Required:');
   console.error('  SUPABASE_URL, SUPABASE_SECRET_KEY, SUPABASE_PUBLISHABLE_KEY');
   console.error('Locally: copy .env.example to .env and fill in your Supabase project values.');
   process.exit(1);
+}
+if (!GIPHY_API_KEY) {
+  console.warn('GIPHY_API_KEY is not set — cute-animal bonus GIFs will be unavailable.');
 }
 
 // Server-side client with the secret key: full DB access, bypasses RLS.
@@ -77,6 +85,7 @@ function publicUser(profile) {
     googooGapMs: profile.googoo_gap_ms == null ? 6500 : profile.googoo_gap_ms,
     googooWord: normalizeGoogooWord(profile.googoo_word),
     googooLoudness: normalizeGoogooLoudness(profile.googoo_loudness),
+    googooEnabled: profile.googoo_enabled !== false,
   };
 }
 
@@ -193,10 +202,14 @@ async function requireAuth(req, res, next) {
   }
 }
 
-// The browser needs these to create its own Supabase client (login + token refresh).
-// The publishable key is safe to expose.
+// The browser needs these to create its own Supabase client (login + token refresh)
+// and to call the GIPHY JS SDK. Both keys are intended for client-side use.
 app.get('/api/config', (req, res) => {
-  res.json({ supabaseUrl: SUPABASE_URL, supabasePublishableKey: SUPABASE_PUBLISHABLE_KEY });
+  res.json({
+    supabaseUrl: SUPABASE_URL,
+    supabasePublishableKey: SUPABASE_PUBLISHABLE_KEY,
+    giphyApiKey: GIPHY_API_KEY || null,
+  });
 });
 
 // Registration is server-side so we can enforce username uniqueness and seed
@@ -279,6 +292,7 @@ app.patch('/api/me', requireAuth, wrap(async (req, res) => {
     googooGapMs,
     googooWord,
     googooLoudness,
+    googooEnabled,
   } = req.body || {};
   const patch = {};
   if (dailyGoal !== undefined) {
@@ -335,6 +349,12 @@ app.patch('/api/me', requireAuth, wrap(async (req, res) => {
       return res.status(400).json({ error: 'googooLoudness must be between 1 and 10' });
     }
     patch.googoo_loudness = loud;
+  }
+  if (googooEnabled !== undefined) {
+    if (typeof googooEnabled !== 'boolean') {
+      return res.status(400).json({ error: 'googooEnabled must be a boolean' });
+    }
+    patch.googoo_enabled = googooEnabled;
   }
   if (!Object.keys(patch).length) {
     return res.status(400).json({ error: 'No valid fields to update' });

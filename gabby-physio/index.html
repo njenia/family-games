@@ -349,7 +349,8 @@
     100% { transform: translateY(-22px) rotate(12deg) scale(1.15); }
   }
 
-  #bonus-video {
+  #bonus-video,
+  #bonus-gif {
     display: none;
     z-index: 2;
     width: min(92vw, 560px);
@@ -360,7 +361,8 @@
     background: #000;
     object-fit: contain;
   }
-  #bonus-video.active { display: block; }
+  #bonus-video.active,
+  #bonus-gif.active { display: block; }
 
   /* ============ catch-gabby mini game ============ */
   #mini-game {
@@ -1267,6 +1269,12 @@
     background: rgba(255,255,255,0.12);
     color: rgba(255,255,255,0.8);
   }
+  #googoo-settings-details {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  #googoo-settings-details[hidden] { display: none; }
   .settings-choice-row {
     display: flex;
     flex-wrap: wrap;
@@ -1494,7 +1502,8 @@
       max-height: min(24dvh, 180px);
       width: min(68vw, 280px);
     }
-    #bonus-video {
+    #bonus-video,
+    #bonus-gif {
       width: min(90vw, 480px);
       max-height: min(42dvh, 360px);
     }
@@ -1528,7 +1537,8 @@
 
     #exercise-video { max-height: min(28dvh, 160px); }
     #between-video { max-height: min(22dvh, 140px); }
-    #bonus-video {
+    #bonus-video,
+    #bonus-gif {
       width: min(88vw, 420px);
       max-height: min(38dvh, 280px);
     }
@@ -1561,7 +1571,8 @@
       max-height: min(42dvh, 160px);
       width: min(50vw, 280px);
     }
-    #bonus-video {
+    #bonus-video,
+    #bonus-gif {
       width: min(58vw, 420px);
       max-height: min(58dvh, 280px);
     }
@@ -1585,7 +1596,8 @@
     #celebration p,
     #face-celebrate,
     #dance-row,
-    #bonus-video { z-index: 2; }
+    #bonus-video,
+    #bonus-gif { z-index: 2; }
   }
 
   @media (hover: none) and (pointer: coarse) {
@@ -1705,16 +1717,18 @@
     </div>
     <div class="settings-card">
       <div class="section-label">Bonus videos</div>
-      <p class="settings-hint">Clips shown between exercises after you finish a set. Pick one or more — we'll pick randomly among the ones you choose.</p>
+      <p class="settings-hint">Clips shown between exercises after you finish a set. Pick one or more — we'll pick randomly among the ones you choose. “Cute animals” loads a fresh GIPHY GIF each time.</p>
       <div class="settings-choice-row" role="group" aria-label="Bonus video sources">
         <button type="button" class="settings-choice" data-bonus-source="custom" aria-pressed="true">Custom</button>
         <button type="button" class="settings-choice" data-bonus-source="raccoon" aria-pressed="false">Raccoons</button>
-        <button type="button" class="settings-choice" data-bonus-source="bunny" aria-pressed="false">Bunnies</button>
+        <button type="button" class="settings-choice" data-bonus-source="bunny" aria-pressed="false">Cute animals</button>
       </div>
     </div>
     <div class="settings-card">
       <div class="section-label">Googoo game</div>
       <p class="settings-hint" id="googoo-settings-hint">Little Gabbys drop from the top — make a loud sound (clap or shout) to zap one. The mic stays on for the whole exercise.</p>
+      <button type="button" class="settings-toggle" id="btn-toggle-googoo" aria-pressed="true">On</button>
+      <div id="googoo-settings-details">
       <div class="settings-sublabel">Loudness needed</div>
       <div class="settings-stepper" role="group" aria-label="Googoo loudness needed">
         <button id="btn-googoo-loud-minus" type="button" aria-label="Quieter sounds count">−</button>
@@ -1732,6 +1746,7 @@
         <button id="btn-googoo-gap-minus" type="button" aria-label="More frequent Gabbys">−</button>
         <span class="stepper-value" id="googoo-gap-num">~6.5s</span>
         <button id="btn-googoo-gap-plus" type="button" aria-label="Less frequent Gabbys">+</button>
+      </div>
       </div>
     </div>
   </section>
@@ -1814,6 +1829,7 @@
   <img id="face-celebrate" class="gabby-face" src="gabby.png" alt="Gabby">
   <div id="dance-row"></div>
   <video id="bonus-video" playsinline></video>
+  <img id="bonus-gif" alt="Cute animal GIF">
   <p id="celebration-sub">Get ready for the next one…</p>
   <button class="big" id="btn-celebration-next" type="button">Next exercise</button>
 </div>
@@ -1837,7 +1853,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="bonus-videos.js"></script>
-<script src="bunny-videos.js"></script>
 <script src="repetition-graphics.js"></script>
 <script>
 'use strict';
@@ -1862,11 +1877,16 @@ const BONUS_VIDEO_SOURCE_KEY = 'gabby-physio-bonus-video-source'; // legacy sing
 const BONUS_VIDEO_SOURCES_KEY = 'gabby-physio-bonus-video-sources';
 const SETTINGS_MIGRATED_KEY = 'gabby-physio-settings-migrated';
 const RACCOON_VID_URL = 'https://api.mapach.es/v1/vid';
+const GIPHY_FETCH_API_URL = 'https://cdn.jsdelivr.net/npm/@giphy/js-fetch-api@5/+esm';
 const BONUS_VIDEO_SOURCE_VALUES = ['custom', 'raccoon', 'bunny'];
+const GIPHY_GIF_SHOW_MS = 6000;
 let soundMuted = false;
 let skipExercisePreview = false;
+let googooEnabled = true;
 /** @type {Array<'custom' | 'raccoon' | 'bunny'>} */
 let bonusVideoSources = ['custom'];
+let giphyApiKey = null;
+let giphyFetch = null;
 
 function normalizeBonusVideoSources(list) {
   const clean = Array.isArray(list)
@@ -1892,6 +1912,7 @@ try {
 function applyUserSettings(user) {
   if (!user) return;
   skipExercisePreview = !!user.skipExercisePreview;
+  googooEnabled = user.googooEnabled !== false;
   bonusVideoSources = normalizeBonusVideoSources(user.bonusVideoSources);
   googooPauseMs = clampGoogooPauseMs(
     user.googooPauseMs == null ? GOOGOO_PAUSE_DEFAULT_MS : user.googooPauseMs
@@ -1903,6 +1924,7 @@ function applyUserSettings(user) {
     user.googooLoudness == null ? GOOGOO_LOUDNESS_DEFAULT : user.googooLoudness
   );
   syncPreviewToggle();
+  syncGoogooEnabledToggle();
   syncBonusVideoSourceChoice();
   syncGoogooTimingSettings();
 }
@@ -2880,7 +2902,7 @@ const googooGame = {
 };
 
 function shouldListenForGoogoo() {
-  return googooGame.supported && state.sessionLive && !state.paused
+  return googooEnabled && googooGame.supported && state.sessionLive && !state.paused
     && !$('celebration').classList.contains('active')
     && googooInvaders.active;
 }
@@ -3027,8 +3049,9 @@ const googooInvaders = {
 
 function syncGoogooInvaders() {
   // Keep invaders running for the whole exercise — work and rest alike.
-  // (Still off between exercises / celebration.)
+  // (Still off between exercises / celebration, or when disabled in Settings.)
   const active =
+    googooEnabled &&
     screens.workout.classList.contains('active') &&
     !state.between &&
     !$('celebration').classList.contains('active');
@@ -4590,10 +4613,22 @@ function stopBonusVideo() {
   v.load();
   v.classList.remove('active');
   v.onended = null;
+  v.onerror = null;
+
+  const g = $('bonus-gif');
+  if (state.bonusGifTimerId) {
+    clearTimeout(state.bonusGifTimerId);
+    state.bonusGifTimerId = null;
+  }
+  g.removeAttribute('src');
+  g.classList.remove('active');
+  g.onload = null;
+  g.onerror = null;
 }
 
 function playBonusSrcOnce(src, { encode = true } = {}) {
   return new Promise((resolve) => {
+    stopBonusGifOnly();
     const v = $('bonus-video');
     v.classList.add('active');
     v.dataset.path = src;
@@ -4625,6 +4660,83 @@ function playBonusSrcOnce(src, { encode = true } = {}) {
   });
 }
 
+function stopBonusGifOnly() {
+  const g = $('bonus-gif');
+  if (state.bonusGifTimerId) {
+    clearTimeout(state.bonusGifTimerId);
+    state.bonusGifTimerId = null;
+  }
+  g.removeAttribute('src');
+  g.classList.remove('active');
+  g.onload = null;
+  g.onerror = null;
+}
+
+async function getGiphyFetch() {
+  if (!giphyApiKey) throw new Error('GIPHY_API_KEY is not configured');
+  if (giphyFetch) return giphyFetch;
+  const mod = await import(GIPHY_FETCH_API_URL);
+  giphyFetch = new mod.GiphyFetch(giphyApiKey);
+  return giphyFetch;
+}
+
+/** Search GIPHY for a cute-animal GIF and show it for a short celebration. */
+async function playCuteAnimalGifOnce() {
+  stopBonusVideo();
+  try {
+    const gf = await getGiphyFetch();
+    // Fresh search every celebration; random offset for variety.
+    const offset = Math.floor(Math.random() * 40);
+    const { data } = await gf.search('cute animal', {
+      limit: 25,
+      offset,
+      rating: 'g',
+      type: 'gifs',
+      sort: 'relevant',
+    });
+    if (!data || !data.length) {
+      console.warn('No GIPHY results for cute animal');
+      return;
+    }
+    const gif = data[Math.floor(Math.random() * data.length)];
+    const url = gif?.images?.downsized?.url
+      || gif?.images?.fixed_height?.url
+      || gif?.images?.original?.url;
+    if (!url) {
+      console.warn('GIPHY result missing image URL');
+      return;
+    }
+    return new Promise((resolve) => {
+      const g = $('bonus-gif');
+      const v = $('bonus-video');
+      v.classList.remove('active');
+      const done = () => {
+        if (state.bonusGifTimerId) {
+          clearTimeout(state.bonusGifTimerId);
+          state.bonusGifTimerId = null;
+        }
+        g.onload = null;
+        g.onerror = null;
+        resolve();
+      };
+      const startTimer = () => {
+        if (state.bonusGifTimerId) return;
+        state.bonusGifTimerId = setTimeout(done, GIPHY_GIF_SHOW_MS);
+      };
+      g.onload = startTimer;
+      g.onerror = () => {
+        console.warn('Bonus GIF failed to load:', url);
+        done();
+      };
+      g.classList.add('active');
+      g.src = url;
+      if (g.complete) startTimer();
+    });
+  } catch (err) {
+    console.warn('GIPHY cute-animal GIF failed:', err.message || err);
+  }
+}
+
 async function playFromLocalPool(list, folder, lastIndexKey) {
   if (!list.length) {
     console.warn('No videos found in', folder);
@@ -4646,15 +4758,6 @@ async function customBonusVideoList() {
   return list;
 }
 
-async function bunnyVideoList() {
-  let list = (CONFIG && CONFIG.bunnyVideos && CONFIG.bunnyVideos.length) ? CONFIG.bunnyVideos : [];
-  if (!list.length) {
-    list = await loadBunnyVideos();
-    if (CONFIG) CONFIG.bunnyVideos = list;
-  }
-  return list;
-}
-
 /** Play a random bonus clip once, from a randomly chosen enabled source. Resolves when it ends. */
 async function playBonusVideoOnce() {
   const sources = bonusVideoSources.length ? bonusVideoSources : ['custom'];
@@ -4665,8 +4768,7 @@ async function playBonusVideoOnce() {
     return playBonusSrcOnce(`${RACCOON_VID_URL}?t=${Date.now()}`, { encode: false });
   }
   if (source === 'bunny') {
-    const list = await bunnyVideoList();
-    return playFromLocalPool(list, BUNNY_FOLDER, 'lastBunnyIndex');
+    return playCuteAnimalGifOnce();
   }
   const list = await customBonusVideoList();
   return playFromLocalPool(list, BONUS_FOLDER, 'lastBonusIndex');
@@ -4695,8 +4797,8 @@ const state = {
   betweenLeft: 7,
   betweenTimerId: null,
   celebrationTimerId: null,
+  bonusGifTimerId: null,
   lastBonusIndex: -1,
-  lastBunnyIndex: -1,
   gabbyRep: 0,
   googooScore: 0,
   // server session tracking
@@ -4726,6 +4828,8 @@ async function initSupabase() {
   const res = await fetch('/api/config');
   if (!res.ok) throw new Error('Server not reachable');
   const cfg = await res.json();
+  giphyApiKey = cfg.giphyApiKey || null;
+  giphyFetch = null;
   sbClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabasePublishableKey);
 }
 
@@ -5859,8 +5963,6 @@ $('btn-restart').addEventListener('click', () => {
 /* ============================== load config ============================== */
 const BONUS_FOLDER = 'video/bonus videos';
 const BONUS_VIDEO_EXT = /\.(mov|mp4|webm|m4v)$/i;
-const BUNNY_FOLDER = 'video/bunny videos';
-const BUNNY_VIDEO_EXT = /\.(mov|mp4|webm|m4v)$/i;
 const REP_GRAPHICS_FOLDER = 'graphics/repititions';
 const REP_GRAPHICS_EXT = /\.(png|jpe?g|webp|gif|svg)$/i;
 
@@ -5959,35 +6061,6 @@ async function loadBonusVideos() {
   return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
-async function loadBunnyVideosByProbe() {
-  const checks = [];
-  for (let i = 1; i <= 40; i++) {
-    checks.push(probeVideoFile(`${BUNNY_FOLDER}/bunny_${i}.mp4`));
-  }
-  const results = await Promise.all(checks);
-  const found = [];
-  for (let i = 0; i < results.length; i++) {
-    if (results[i]) found.push(`${BUNNY_FOLDER}/bunny_${i + 1}.mp4`);
-  }
-  return found;
-}
-
-async function loadBunnyVideos() {
-  const set = new Set();
-
-  if (Array.isArray(window.BUNNY_VIDEOS)) {
-    window.BUNNY_VIDEOS.forEach((p) => set.add(p));
-  }
-
-  const fromDir = await loadPathsFromDirectory(BUNNY_FOLDER, BUNNY_VIDEO_EXT);
-  if (fromDir) fromDir.forEach((p) => set.add(p));
-
-  const probed = await loadBunnyVideosByProbe();
-  probed.forEach((p) => set.add(p));
-
-  return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-}
-
 async function loadRepetitionGraphics() {
   const set = new Set();
   if (Array.isArray(window.REPETITION_GRAPHICS)) {
@@ -6002,7 +6075,6 @@ function applyConfig(config) {
   CONFIG = config;
   EXERCISES = config.exercises || [];
   if (!Array.isArray(CONFIG.bonusVideos)) CONFIG.bonusVideos = [];
-  if (!Array.isArray(CONFIG.bunnyVideos)) CONFIG.bunnyVideos = [];
   if (config.title) {
     document.title = config.title;
     $('app-title').textContent = config.title;
@@ -6184,6 +6256,7 @@ $('btn-googoo-gap-plus').addEventListener('click', () => changeGoogooGap(1));
 $('btn-googoo-loud-minus').addEventListener('click', () => changeGoogooLoudness(-1));
 $('btn-googoo-loud-plus').addEventListener('click', () => changeGoogooLoudness(1));
 $('btn-toggle-preview').addEventListener('click', toggleExercisePreview);
+$('btn-toggle-googoo').addEventListener('click', toggleGoogooEnabled);
 document.querySelectorAll('.settings-choice[data-bonus-source]').forEach((btn) => {
   btn.addEventListener('click', () => toggleBonusVideoSource(btn.dataset.bonusSource));
 });
@@ -6199,6 +6272,19 @@ function syncPreviewToggle() {
     : 'Exercise preview is off. Tap to turn on.');
 }
 
+function syncGoogooEnabledToggle() {
+  const btn = $('btn-toggle-googoo');
+  if (!btn) return;
+  const on = !!googooEnabled;
+  btn.textContent = on ? 'On' : 'Off';
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  btn.setAttribute('aria-label', on
+    ? 'Googoo game is on. Tap to turn off.'
+    : 'Googoo game is off. Tap to turn on.');
+  const details = $('googoo-settings-details');
+  if (details) details.hidden = !on;
+}
+
 async function toggleExercisePreview() {
   if (!ME) return;
   const prev = skipExercisePreview;
@@ -6211,6 +6297,24 @@ async function toggleExercisePreview() {
   } catch (_) {
     skipExercisePreview = prev;
     syncPreviewToggle();
+  }
+}
+
+async function toggleGoogooEnabled() {
+  if (!ME) return;
+  const prev = googooEnabled;
+  googooEnabled = !googooEnabled;
+  syncGoogooEnabledToggle();
+  syncWorkoutSurprises();
+  try {
+    const data = await api('PATCH', '/api/me', { googooEnabled });
+    ME.user = data.user;
+    applyUserSettings(ME.user);
+    syncWorkoutSurprises();
+  } catch (_) {
+    googooEnabled = prev;
+    syncGoogooEnabledToggle();
+    syncWorkoutSurprises();
   }
 }
 
@@ -6385,7 +6489,6 @@ async function enterApp() {
   renderStartScreen();
   showScreen('start');
   CONFIG.bonusVideos = await loadBonusVideos();
-  CONFIG.bunnyVideos = await loadBunnyVideos();
   REPETITION_GRAPHICS = await loadRepetitionGraphics();
 }
 
