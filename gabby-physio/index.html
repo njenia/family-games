@@ -639,6 +639,27 @@
     color: #ffe45c;
     font-weight: 700;
   }
+  #finish-googoo.record {
+    color: #ffd700;
+    font-weight: 900;
+    font-size: clamp(1.05rem, 4.2vw, 1.35rem);
+    text-shadow: 0 0 16px rgba(255, 215, 0, 0.55), 2px 2px 0 rgba(0,0,0,0.35);
+    animation: googoo-record-pop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes googoo-record-pop {
+    0%   { transform: scale(0.6); opacity: 0; }
+    60%  { transform: scale(1.12); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  #screen-finish.googoo-record #trophy {
+    filter: drop-shadow(0 0 18px rgba(255, 215, 0, 0.65));
+    animation: trophy-pop 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+               bob 1.2s ease-in-out 0.9s infinite;
+  }
+  #screen-finish.googoo-record #finish-title {
+    animation: pop-in 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+    text-shadow: 0 0 24px rgba(255, 215, 0, 0.55), 3px 3px 0 rgba(0,0,0,0.35);
+  }
   #screen-finish #finish-stars {
     justify-content: center;
   }
@@ -3416,7 +3437,9 @@ function clearDailyGoalCelebration() {
   fxRunning = false;
   if (fx) fx.clearRect(0, 0, W(), H());
   const finish = $('screen-finish');
-  if (finish) finish.classList.remove('daily-goal');
+  if (finish) finish.classList.remove('daily-goal', 'googoo-record');
+  const googooEl = $('finish-googoo');
+  if (googooEl) googooEl.classList.remove('record');
 }
 
 function playDailyGoalMusic() {
@@ -3688,13 +3711,38 @@ async function syncGoogooHighScore() {
   }
 }
 
+/** Big party when a Googoo session beats the personal best (finish screen). */
+function playGoogooRecordCelebration() {
+  playDailyGoalMusic();
+  spawnBouncingGabbys(20);
+  megaGabby();
+  confettiBurst();
+  fireworks();
+  sideCannons();
+  startFx();
+  if (!soundMuted) sounds.cheer();
+  for (let w = 1; w <= 4; w++) {
+    dailyGoalTimers.push(setTimeout(() => {
+      if (!screens.finish.classList.contains('active')) return;
+      spawnBouncingGabbys(12);
+      confettiBurst();
+      if (w % 2 === 0) fireworks();
+      if (w === 2) megaGabby();
+      if (!soundMuted) sounds.cheer();
+      startFx();
+    }, w * 900));
+  }
+}
+
 /** Reports the just-finished session's Googoo score, persists a new high score, and resets for next session. */
 async function finishGoogooSession() {
   const el = $('finish-googoo');
   if (!el) return;
   const n = state.googooScore || 0;
   state.googooScore = 0;
-  if (!googooGame.supported && n === 0) {
+  el.classList.remove('record');
+  $('screen-finish').classList.remove('googoo-record');
+  if ((!googooGame.supported || !googooEnabled) && n === 0) {
     el.hidden = true;
     return;
   }
@@ -3710,12 +3758,22 @@ async function finishGoogooSession() {
 
   const renderResult = () => {
     el.hidden = false;
+    el.classList.toggle('record', isNewRecord && n > 0);
     el.textContent = isNewRecord && n > 0
       ? `Googoo game — new high score! ${n} point${n === 1 ? '' : 's'}!!`
       : `Googoo game — ${n} point${n === 1 ? '' : 's'} this session`
         + (highScore > 0 ? ` · Best ${highScore}` : '');
   };
   renderResult();
+
+  if (isNewRecord && n > 0) {
+    $('screen-finish').classList.add('googoo-record');
+    // Don't override the daily-goal title sequence if that party is about to run.
+    if (!$('screen-finish').classList.contains('daily-goal')) {
+      $('finish-title').textContent = 'Googoo high score!!';
+    }
+    playGoogooRecordCelebration();
+  }
 
   try {
     const data = await api('POST', '/api/me/googoo', { score: n });
