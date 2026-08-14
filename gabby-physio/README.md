@@ -44,9 +44,14 @@ so redeploys lose nothing.
 
 - **Auth**: Supabase Auth with username + PIN. Usernames are mapped to synthetic
   emails (`<username>@gabby.example.com`); no email is ever sent. The browser
-  uses supabase-js with the publishable key for login and automatic token
-  refresh; API calls carry the Supabase JWT as a bearer token, which the server
-  verifies with the secret key.
+  uses supabase-js with the publishable key for login; the session is stored in
+  `localStorage` and the access JWT is refreshed automatically (and again on
+  boot / before API calls if it expired while the tab was closed), so users stay
+  logged in across days without re-entering their PIN. API calls carry the
+  Supabase JWT as a bearer token, which the server verifies with the secret key.
+  To cap login lifetime at 3 days (optional), set **Time-box user sessions** to
+  `259200` seconds under Supabase → Authentication → Sessions; leave it unset
+  for “stay logged in until logout.”
 - **Registration** happens server-side (`POST /api/register`) so usernames stay
   unique and each new account is seeded with a profile and a default exercise
   scheme from `exercises.json`.

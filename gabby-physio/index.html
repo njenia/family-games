@@ -4888,13 +4888,42 @@ async function initSupabase() {
   const cfg = await res.json();
   giphyApiKey = cfg.giphyApiKey || null;
   giphyFetch = null;
-  sbClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabasePublishableKey);
+  // Persist + auto-refresh so login survives browser restarts for days
+  // (access JWT ~1h; refresh token keeps the session alive until logout /
+  // Supabase Auth → Sessions time-box, if any).
+  sbClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabasePublishableKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+    },
+  });
 }
 
+/** True when the stored access JWT is missing or within 60s of expiry. */
+function accessTokenNeedsRefresh(session) {
+  if (!session || !session.access_token) return true;
+  const exp = session.expires_at; // unix seconds
+  if (!exp) return false;
+  return exp * 1000 < Date.now() + 60_000;
+}
+
+/**
+ * Return a usable access token. After the tab has been closed longer than the
+ * JWT lifetime, getSession() still returns the stale token — refresh first so
+ * we don't 401 and wipe the saved login.
+ */
 async function authToken() {
   if (!sbClient) return null;
   const { data } = await sbClient.auth.getSession();
-  return data.session ? data.session.access_token : null;
+  let session = data.session;
+  if (!session) return null;
+  if (accessTokenNeedsRefresh(session)) {
+    const { data: refreshed, error } = await sbClient.auth.refreshSession();
+    if (error || !refreshed.session) return null;
+    session = refreshed.session;
+  }
+  return session.access_token;
 }
 
 function localDateStr() {
@@ -4902,7 +4931,7 @@ function localDateStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-async function api(method, url, body) {
+async function api(method, url, body, { _retried } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   const token = await authToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -4913,6 +4942,13 @@ async function api(method, url, body) {
   });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && !url.includes('/api/register')) {
+    // One refresh+retry before treating as logged out (covers race with expiry).
+    if (!_retried && sbClient) {
+      const { data: refreshed, error } = await sbClient.auth.refreshSession();
+      if (!error && refreshed.session) {
+        return api(method, url, body, { _retried: true });
+      }
+    }
     if (sbClient) sbClient.auth.signOut().catch(() => {});
     showAuth();
     throw new Error(data.error || 'Please log in');
