@@ -1897,6 +1897,7 @@ const SKIP_PREVIEW_KEY = 'gabby-physio-skip-exercise-preview';
 const BONUS_VIDEO_SOURCE_KEY = 'gabby-physio-bonus-video-source'; // legacy single-choice key
 const BONUS_VIDEO_SOURCES_KEY = 'gabby-physio-bonus-video-sources';
 const SETTINGS_MIGRATED_KEY = 'gabby-physio-settings-migrated';
+const GOOGOO_ENABLED_KEY = 'gabby-physio-googoo-enabled';
 const RACCOON_VID_URL = 'https://api.mapach.es/v1/vid';
 const GIPHY_FETCH_API_URL = 'https://cdn.jsdelivr.net/npm/@giphy/js-fetch-api@5/+esm';
 const BONUS_VIDEO_SOURCE_VALUES = ['custom', 'raccoon', 'bunny'];
@@ -1921,6 +1922,11 @@ try { soundMuted = localStorage.getItem(SOUND_MUTE_KEY) === '1'; } catch (_) {}
 // a bootstrap until migrateLocalSettingsOnce() runs.
 try { skipExercisePreview = localStorage.getItem(SKIP_PREVIEW_KEY) === '1'; } catch (_) {}
 try {
+  const raw = localStorage.getItem(GOOGOO_ENABLED_KEY);
+  if (raw === '0') googooEnabled = false;
+  else if (raw === '1') googooEnabled = true;
+} catch (_) {}
+try {
   const raw = localStorage.getItem(BONUS_VIDEO_SOURCES_KEY);
   if (raw) {
     bonusVideoSources = normalizeBonusVideoSources(JSON.parse(raw));
@@ -1930,10 +1936,24 @@ try {
   }
 } catch (_) {}
 
+function persistGoogooEnabled(on) {
+  googooEnabled = !!on;
+  if (ME && ME.user) ME.user.googooEnabled = googooEnabled;
+  try { localStorage.setItem(GOOGOO_ENABLED_KEY, googooEnabled ? '1' : '0'); } catch (_) {}
+}
+
 function applyUserSettings(user) {
   if (!user) return;
   skipExercisePreview = !!user.skipExercisePreview;
-  googooEnabled = user.googooEnabled !== false;
+  if (typeof user.googooEnabled === 'boolean') persistGoogooEnabled(user.googooEnabled);
+  else {
+    try {
+      const raw = localStorage.getItem(GOOGOO_ENABLED_KEY);
+      if (raw === '0') googooEnabled = false;
+      else if (raw === '1') googooEnabled = true;
+    } catch (_) {}
+    if (ME && ME.user) ME.user.googooEnabled = googooEnabled;
+  }
   bonusVideoSources = normalizeBonusVideoSources(user.bonusVideoSources);
   googooPauseMs = clampGoogooPauseMs(
     user.googooPauseMs == null ? GOOGOO_PAUSE_DEFAULT_MS : user.googooPauseMs
@@ -6397,16 +6417,23 @@ async function toggleExercisePreview() {
 async function toggleGoogooEnabled() {
   if (!ME) return;
   const prev = googooEnabled;
-  googooEnabled = !googooEnabled;
+  persistGoogooEnabled(!googooEnabled);
   syncGoogooEnabledToggle();
   syncWorkoutSurprises();
   try {
     const data = await api('PATCH', '/api/me', { googooEnabled });
-    ME.user = data.user;
+    if (data.user) {
+      ME.user = {
+        ...data.user,
+        googooEnabled: typeof data.user.googooEnabled === 'boolean'
+          ? data.user.googooEnabled
+          : googooEnabled,
+      };
+    }
     applyUserSettings(ME.user);
     syncWorkoutSurprises();
   } catch (_) {
-    googooEnabled = prev;
+    persistGoogooEnabled(prev);
     syncGoogooEnabledToggle();
     syncWorkoutSurprises();
   }

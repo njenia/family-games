@@ -85,7 +85,10 @@ function publicUser(profile) {
     googooGapMs: profile.googoo_gap_ms == null ? 6500 : profile.googoo_gap_ms,
     googooWord: normalizeGoogooWord(profile.googoo_word),
     googooLoudness: normalizeGoogooLoudness(profile.googoo_loudness),
-    googooEnabled: profile.googoo_enabled !== false,
+    // Only include when the column is present — missing column must not mean "on".
+    ...(Object.prototype.hasOwnProperty.call(profile, 'googoo_enabled')
+      ? { googooEnabled: !!profile.googoo_enabled }
+      : {}),
   };
 }
 
@@ -359,8 +362,20 @@ app.patch('/api/me', requireAuth, wrap(async (req, res) => {
   if (!Object.keys(patch).length) {
     return res.status(400).json({ error: 'No valid fields to update' });
   }
-  const { data, error } = await sb.from('profiles')
+  let { data, error } = await sb.from('profiles')
     .update(patch).eq('user_id', req.user.user_id).select().single();
+  if (error && patch.googoo_enabled !== undefined
+    && /googoo_enabled/i.test(`${error.message || ''} ${error.details || ''} ${error.code || ''}`)) {
+    const requestedEnabled = patch.googoo_enabled;
+    delete patch.googoo_enabled;
+    if (!Object.keys(patch).length) {
+      return res.json({ user: { ...publicUser(req.user), googooEnabled: requestedEnabled } });
+    }
+    ({ data, error } = await sb.from('profiles')
+      .update(patch).eq('user_id', req.user.user_id).select().single());
+    if (error) throw error;
+    return res.json({ user: { ...publicUser(data), googooEnabled: requestedEnabled } });
+  }
   if (error) throw error;
   res.json({ user: publicUser(data) });
 }));
