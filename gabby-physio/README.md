@@ -16,7 +16,8 @@ tracking (Supabase Postgres).
    length + gap between freezes), then `0008_googoo_word.sql` (Googoo trigger
    word), then `0009_googoo_loudness.sql` (Googoo loud-sound threshold), then
    `0010_googoo_enabled.sql` (toggle Googoo game on/off), then
-   `0011_giphy_query.sql` (search query for cute-animal GIPHY GIFs).
+   `0011_giphy_query.sql` (search query for cute-animal GIPHY GIFs), then
+   `0012_gabby_dash_high_score.sql` (Gabby Dash personal best).
 2. **Environment**: copy `.env.example` to `.env` and fill in `SUPABASE_URL`,
    `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (Project Settings → API Keys),
    and `GIPHY_API_KEY` (https://developers.giphy.com/dashboard/) for cute-animal
@@ -86,7 +87,17 @@ on screen for a point. The microphone stays open continuously via Web Audio
 fall time, spawn interval, and how loud the sound must be (saved on the profile).
 Points accumulate for the session and reset next session; the best single
 session is shown at the end and tracked historically (`googoo_high_score`),
-alongside the Catch Gabby high score on the home screen.
+alongside the Catch Gabby and Gabby Dash high scores on the home screen.
+
+Hitting the daily goal opens a **bonus round** where you pick **Catch Gabby**
+(tap bouncing Gabbys) or **Gabby Dash** (3-lane runner: Gabby stays at the
+bottom, tap left/right half of the screen to switch lanes, dodge obstacles
+falling from the top; speed steps up every 5 seconds). Each game has its own
+high score (`catch_gabby_high_score`, `gabby_dash_high_score`).
+
+Add `?test=1` to the URL to show both games on the home screen for quick play.
+In test mode those scores are not saved.
+
 New accounts are seeded from `exercises.json` (the single exercise-config source
 of truth) into each user's scheme in the database. `GET /api/scheme` also reloads
 that file so existing accounts stay in sync when the scheme changes.

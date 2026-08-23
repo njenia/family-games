@@ -87,6 +87,7 @@ function publicUser(profile) {
     avatarUrl: profile.avatar_url || null,
     catchGabbyHighScore: profile.catch_gabby_high_score || 0,
     googooHighScore: profile.googoo_high_score || 0,
+    gabbyDashHighScore: profile.gabby_dash_high_score || 0,
     skipExercisePreview: !!profile.skip_exercise_preview,
     bonusVideoSources: normalizeBonusVideoSources(profile.bonus_video_sources),
     giphyQuery: normalizeGiphyQuery(profile.giphy_query),
@@ -415,6 +416,33 @@ app.post('/api/me/catch-gabby', requireAuth, wrap(async (req, res) => {
   }
   const { data, error } = await sb.from('profiles')
     .update({ catch_gabby_high_score: score })
+    .eq('user_id', req.user.user_id)
+    .select()
+    .single();
+  if (error) throw error;
+  res.json({
+    highScore: score,
+    isNewRecord: true,
+    user: publicUser(data),
+  });
+}));
+
+/** Submit a Gabby Dash score (3-lane runner); updates the profile only when it beats the high score. */
+app.post('/api/me/gabby-dash', requireAuth, wrap(async (req, res) => {
+  const score = parseInt(req.body && req.body.score, 10);
+  if (!(Number.isFinite(score) && score >= 0 && score <= 1000000)) {
+    return res.status(400).json({ error: 'Score must be between 0 and 1000000' });
+  }
+  const current = req.user.gabby_dash_high_score || 0;
+  if (score <= current) {
+    return res.json({
+      highScore: current,
+      isNewRecord: false,
+      user: publicUser(req.user),
+    });
+  }
+  const { data, error } = await sb.from('profiles')
+    .update({ gabby_dash_high_score: score })
     .eq('user_id', req.user.user_id)
     .select()
     .single();

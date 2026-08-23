@@ -508,6 +508,174 @@
   }
   #mini-game-continue.active { display: inline-flex; }
 
+  #test-minigames {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    margin-top: 4px;
+  }
+  body.test-mode #test-minigames { display: flex; }
+  #test-minigames .test-label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: #fbbf24;
+    text-align: center;
+  }
+  #test-minigames .ghost { width: 100%; }
+
+  #mini-game-pick {
+    position: fixed;
+    inset: 0;
+    z-index: 61;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: max(20px, var(--safe-top)) max(16px, var(--safe-right)) max(20px, var(--safe-bottom)) max(16px, var(--safe-left));
+    background: rgba(15, 8, 40, 0.94);
+    backdrop-filter: blur(4px);
+    text-align: center;
+  }
+  #mini-game-pick.active { display: flex; }
+  #mini-game-pick h2 {
+    font-size: clamp(1.6rem, 6vw, 2.4rem);
+    color: var(--accent);
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.35);
+  }
+  #mini-game-pick p {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    max-width: 22em;
+  }
+  #mini-game-pick-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    width: 100%;
+    max-width: 520px;
+    justify-content: center;
+  }
+  #mini-game-pick-row .big {
+    flex: 1 1 200px;
+  }
+
+  #lane-dash {
+    position: fixed;
+    inset: 0;
+    z-index: 62;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: max(16px, var(--safe-top)) max(12px, var(--safe-right)) max(16px, var(--safe-bottom)) max(12px, var(--safe-left));
+    background: rgba(15, 8, 40, 0.96);
+    text-align: center;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+  }
+  #lane-dash.active { display: flex; }
+  #lane-dash-title {
+    font-size: clamp(1.5rem, 5.5vw, 2.2rem);
+    color: var(--accent);
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.35);
+    margin-top: 4px;
+  }
+  #lane-dash-meta {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+  }
+  #lane-dash-meta strong { color: var(--accent); }
+  #lane-dash-stage {
+    position: relative;
+    flex: 1 1 auto;
+    width: min(100%, 420px);
+    min-height: 280px;
+    border-radius: 22px;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(56, 189, 248, 0.18), rgba(15, 8, 40, 0.2) 38%, rgba(34, 197, 94, 0.22));
+    border: 3px solid rgba(255,255,255,0.22);
+    box-shadow: inset 0 0 40px rgba(0,0,0,0.25);
+  }
+  .lane-dash-track {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .lane-dash-col {
+    border-left: 2px dashed rgba(255,255,255,0.18);
+  }
+  .lane-dash-col:first-child { border-left: none; }
+  .lane-dash-player {
+    position: absolute;
+    left: 0;
+    bottom: 10px;
+    width: 72px;
+    height: 72px;
+    margin-left: -36px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 3px solid var(--accent);
+    background: #fff;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.35);
+    z-index: 2;
+    will-change: left;
+    transition: left 0.12s ease-out;
+  }
+  .lane-dash-player img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    pointer-events: none;
+  }
+  .lane-dash-hit {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 56px;
+    height: 56px;
+    margin-left: -28px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    background: #fff;
+    border: 3px solid #fb7185;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.3);
+    z-index: 1;
+    will-change: top;
+  }
+  #lane-dash-hint {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.82);
+  }
+  #lane-dash-result {
+    z-index: 2;
+    font-size: clamp(1.15rem, 4.2vw, 1.5rem);
+    font-weight: 800;
+    color: var(--accent);
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+    max-width: 20em;
+  }
+  #lane-dash-continue {
+    display: none;
+    z-index: 2;
+  }
+  #lane-dash-continue.active { display: inline-flex; }
+  #lane-dash.over .lane-dash-player { filter: grayscale(0.4); }
+
   @keyframes flash { 0% { opacity: 0.55; } 100% { opacity: 0; } }
   #flash {
     position: fixed; inset: 0;
@@ -1085,6 +1253,16 @@
     font-size: 1.1rem;
     font-variant-numeric: tabular-nums;
   }
+  #profile-dash-score {
+    margin-top: 4px;
+    font-size: 0.9rem;
+    color: rgba(255,255,255,0.8);
+  }
+  #profile-dash-score strong {
+    color: var(--accent);
+    font-size: 1.1rem;
+    font-variant-numeric: tabular-nums;
+  }
   #profile-googoo-score {
     margin-top: 4px;
     font-size: 0.9rem;
@@ -1261,6 +1439,7 @@
   }
   .settings-word-row button {
     flex: 0 0 auto;
+    min-width: 5.6em;
     min-height: var(--touch-min);
     padding: 10px 16px;
     border-radius: 14px;
@@ -1271,6 +1450,13 @@
     font-weight: 800;
     cursor: pointer;
     touch-action: manipulation;
+  }
+  .settings-word-row button[disabled] {
+    opacity: 0.8;
+    cursor: wait;
+  }
+  .settings-word-row button.is-saved {
+    background: rgba(34, 197, 94, 0.5);
   }
   .settings-toggle {
     align-self: flex-start;
@@ -1703,6 +1889,7 @@
             <div id="profile-name">Player</div>
             <div id="profile-total"><strong>0</strong> total sessions</div>
             <div id="profile-high-score">Catch Gabby best: <strong>—</strong></div>
+            <div id="profile-dash-score">Gabby Dash best: <strong>—</strong></div>
             <div id="profile-googoo-score">Googoo best: <strong>—</strong></div>
           </div>
         </div>
@@ -1713,6 +1900,11 @@
         <p class="error" id="load-error" hidden></p>
         <div class="home-actions">
           <button class="big" id="btn-start" disabled>Let's Go!</button>
+          <div id="test-minigames">
+            <div class="test-label">Test mode · scores are not saved</div>
+            <button class="ghost" id="btn-test-catch" type="button">Play Catch Gabby</button>
+            <button class="ghost" id="btn-test-dash" type="button">Play Gabby Dash</button>
+          </div>
         </div>
       </div>
       <aside class="home-aside">
@@ -1887,6 +2079,33 @@
   <button class="big" id="mini-game-continue" type="button">All done!</button>
 </div>
 
+<div id="mini-game-pick">
+  <h2>Bonus round!</h2>
+  <p>Pick a game to play. Beat your high score!</p>
+  <div id="mini-game-pick-row">
+    <button class="big" id="btn-pick-catch" type="button">Catch Gabby</button>
+    <button class="big" id="btn-pick-dash" type="button">Gabby Dash</button>
+  </div>
+</div>
+
+<div id="lane-dash">
+  <h2 id="lane-dash-title">Gabby Dash!</h2>
+  <p id="lane-dash-meta">Score <strong id="lane-dash-score">0</strong></p>
+  <div id="lane-dash-stage">
+    <div class="lane-dash-track" aria-hidden="true">
+      <div class="lane-dash-col"></div>
+      <div class="lane-dash-col"></div>
+      <div class="lane-dash-col"></div>
+    </div>
+    <div class="lane-dash-player" id="lane-dash-player">
+      <img src="gabby.png" alt="Gabby">
+    </div>
+  </div>
+  <p id="lane-dash-hint">Tap left or right to switch lanes</p>
+  <p id="lane-dash-result" hidden></p>
+  <button class="big" id="lane-dash-continue" type="button">All done!</button>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="bonus-videos.js"></script>
 <script src="repetition-graphics.js"></script>
@@ -1904,6 +2123,8 @@ const DANCE_EMOJIS = ['🎉','🥳','🌟','🦄','🐸','🎈','🍭','🐱','�
 
 let CONFIG = null;
 let EXERCISES = [];
+const TEST_MODE = new URLSearchParams(location.search).get('test') === '1';
+if (TEST_MODE) document.body.classList.add('test-mode');
 
 /* ============================== audio ============================== */
 let audioCtx = null;
@@ -2134,7 +2355,7 @@ const STRONG_TRACKS = [
 const REST_TRACK = 'audio/rest.m4a';
 
 const music = {
-  mode: null, // 'work' | 'rest' | null
+  mode: null, // 'work' | 'rest' | 'catch' | 'dash' | null
   paused: false, // session pause (separate from user mute)
   strongAudio: null,
   restAudio: null,
@@ -2157,7 +2378,7 @@ const music = {
     return ac;
   },
 
-  /** @param {'work'|'rest'|null} mode */
+  /** @param {'work'|'rest'|'catch'|'dash'|null} mode */
   set(mode) {
     if (mode === 'work') {
       const alreadyWork = this.mode === 'work';
@@ -2180,8 +2401,9 @@ const music = {
     this._stopBed();
     this._stopRest();
     this.mode = mode;
-    if (!mode) return;
-    this._startRestBed(); // calm bed for whole rest
+    if (mode === 'rest') this._startRestBed();
+    else if (mode === 'catch') this._startCatchBed();
+    else if (mode === 'dash') this._startDashBed();
   },
 
   stop() {
@@ -2223,10 +2445,11 @@ const music = {
     if (this.mode === 'rest' && this.restAudio && !this.restAudio.ended) {
       this.restAudio.play().catch(() => {});
     }
-    if (this.master && this.mode === 'work') {
+    if (this.master && (this.mode === 'work' || this.mode === 'catch' || this.mode === 'dash')) {
       const ac = ctx();
+      const vol = this.mode === 'dash' ? 0.2 : 0.18;
       this.master.gain.cancelScheduledValues(ac.currentTime);
-      this.master.gain.setTargetAtTime(0.18, ac.currentTime, 0.08);
+      this.master.gain.setTargetAtTime(vol, ac.currentTime, 0.08);
     }
   },
 
@@ -2361,6 +2584,75 @@ const music = {
     this._bedNote(bass[beat], 0.14, { type: 'triangle', vol: 0.12 });
     const lead = [523.3, 659.3, 783.9, 1046.5, 783.9, 659.3, 587.3, 523.3];
     this._bedNote(lead[beat], 0.1, { type: 'square', vol: 0.035 });
+    this.bedStep++;
+  },
+
+  _startCatchBed() {
+    this.ensureMaster();
+    if (!this.isSilent()) {
+      const ac = ctx();
+      this.master.gain.cancelScheduledValues(ac.currentTime);
+      this.master.gain.setTargetAtTime(0.2, ac.currentTime, 0.05);
+    }
+    this.bedStep = 0;
+    this._clearBedTimer();
+    this.bedTimer = setInterval(() => this._catchBedTick(), 210);
+    this._catchBedTick();
+  },
+
+  /** Bouncy cartoon chase — offbeat kicks, major pentatonic hops. */
+  _catchBedTick() {
+    if (this.isSilent() || this.mode !== 'catch') return;
+    const beat = this.bedStep % 16;
+    if (beat === 0 || beat === 3 || beat === 8 || beat === 11) this._bedKick();
+    if (beat === 4 || beat === 12) this._bedNoise(0.04, 0.07);
+    if (beat % 2 === 1) this._bedNoise(0.012, 0.025);
+    const bass = [130.8, 0, 164.8, 196, 164.8, 0, 196, 220, 130.8, 0, 164.8, 196, 146.8, 164.8, 196, 261.6];
+    if (bass[beat]) this._bedNote(bass[beat], 0.16, { type: 'triangle', vol: 0.14 });
+    const hop = [659.3, 783.9, 659.3, 523.3, 784, 987.8, 784, 659.3, 523.3, 659.3, 784, 1046.5, 784, 659.3, 587.3, 659.3];
+    this._bedNote(hop[beat], 0.09, { type: 'triangle', vol: 0.055 });
+    if (beat === 7 || beat === 15) this._bedNote(1318.5, 0.07, { type: 'sine', vol: 0.05 });
+    this.bedStep++;
+  },
+
+  _startDashBed() {
+    this.ensureMaster();
+    if (!this.isSilent()) {
+      const ac = ctx();
+      this.master.gain.cancelScheduledValues(ac.currentTime);
+      this.master.gain.setTargetAtTime(0.22, ac.currentTime, 0.05);
+    }
+    this.bedStep = 0;
+    this._clearBedTimer();
+    this._scheduleDashTimer();
+    this._dashBedTick();
+  },
+
+  _scheduleDashTimer() {
+    this._clearBedTimer();
+    const speed = (typeof gabbyDash !== 'undefined' && gabbyDash.speed) ? gabbyDash.speed : 240;
+    const ms = Math.max(95, Math.round(165 * (240 / speed)));
+    this.bedTimer = setInterval(() => this._dashBedTick(), ms);
+  },
+
+  refreshDashTempo() {
+    if (this.mode !== 'dash') return;
+    this._scheduleDashTimer();
+  },
+
+  /** Driving 8-bit runner — four-on-the-floor + minor arp; tempo follows Dash speed. */
+  _dashBedTick() {
+    if (this.isSilent() || this.mode !== 'dash') return;
+    const beat = this.bedStep % 16;
+    if (beat % 2 === 0) this._bedKick();
+    if (beat % 2 === 1) this._bedNoise(0.03, 0.05);
+    if (beat === 4 || beat === 12) this._bedNoise(0.06, 0.09);
+    const bass = [110, 110, 110, 130.8, 110, 110, 98, 82.4, 110, 110, 130.8, 146.8, 110, 98, 82.4, 98];
+    this._bedNote(bass[beat], 0.12, { type: 'sawtooth', vol: 0.07 });
+    this._bedNote(bass[beat] / 2, 0.14, { type: 'triangle', vol: 0.11 });
+    const arp = [440, 523.3, 659.3, 880, 659.3, 523.3, 392, 523.3];
+    this._bedNote(arp[beat % 8], 0.08, { type: 'square', vol: 0.04 });
+    if (beat === 0 || beat === 8) this._bedNote(1760, 0.05, { type: 'square', vol: 0.03 });
     this.bedStep++;
   },
 };
@@ -3477,6 +3769,8 @@ function clearDailyGoalCelebration() {
   clearDailyGoalTimers();
   stopDailyGoalAudio();
   stopCatchGabbyMiniGame(true);
+  stopGabbyDash(true);
+  hideMinigamePicker();
   particles = [];
   fxRunning = false;
   if (fx) fx.clearRect(0, 0, W(), H());
@@ -3639,7 +3933,7 @@ function startDailyGoalCelebration() {
     if (!screens.finish.classList.contains('active')) return;
     endDailyGoalPartyFx();
     $('finish-title').textContent = 'Bonus round!';
-    startCatchGabbyMiniGame();
+    showMinigamePicker();
   }, waveCount * waveMs + 1200));
 }
 
@@ -3725,6 +4019,33 @@ function effectiveGoogooHighScore() {
 async function syncGoogooHighScore() {
   if (!ME || !ME.user) return;
   setStoredGoogooHighScore(ME.user.googooHighScore || 0);
+}
+
+function gabbyDashHsKey() {
+  return ME && ME.user && ME.user.id ? `gabby-physio-dash-high-${ME.user.id}` : null;
+}
+
+function getStoredGabbyDashHighScore() {
+  const key = gabbyDashHsKey();
+  if (!key) return 0;
+  const n = parseInt(localStorage.getItem(key), 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function setStoredGabbyDashHighScore(score) {
+  const key = gabbyDashHsKey();
+  if (!key) return;
+  localStorage.setItem(key, String(Math.max(0, Math.floor(score))));
+}
+
+function effectiveGabbyDashHighScore() {
+  if (ME && ME.user) return ME.user.gabbyDashHighScore || 0;
+  return getStoredGabbyDashHighScore();
+}
+
+async function syncGabbyDashHighScore() {
+  if (!ME || !ME.user) return;
+  setStoredGabbyDashHighScore(ME.user.gabbyDashHighScore || 0);
 }
 
 /** Big party when a Googoo session beats the personal best (finish screen). */
@@ -3855,6 +4176,7 @@ function stopCatchGabbyMiniGame(silent = false) {
   $('mini-game').classList.remove('active');
   $('mini-game-result').hidden = true;
   $('mini-game-continue').classList.remove('active');
+  if (music.mode === 'catch') music.set(null);
   if (!silent && typeof catchGabby.onDone === 'function') {
     const done = catchGabby.onDone;
     catchGabby.onDone = null;
@@ -4007,6 +4329,7 @@ function startCatchGabbyMiniGame(onDone) {
   });
 
   if (!soundMuted) sounds.goBeep();
+  music.set('catch');
   catchGabby.tickId = setInterval(() => {
     if (!catchGabby.active) return;
     if (syncCatchGabbyClock() <= 0) finishCatchGabbyMiniGame();
@@ -4126,6 +4449,7 @@ async function finishCatchGabbyMiniGame() {
   if (!catchGabby.active) return;
   catchGabby.active = false;
   catchGabby.endsAt = Date.now();
+  if (music.mode === 'catch') music.set(null);
   updateMiniGameRing();
   if (catchGabby.raf) {
     cancelAnimationFrame(catchGabby.raf);
@@ -4139,23 +4463,25 @@ async function finishCatchGabbyMiniGame() {
 
   const n = catchGabby.score;
   const prevBest = effectiveCatchHighScore();
-  let isNewRecord = n > prevBest;
+  let isNewRecord = !TEST_MODE && n > prevBest;
   let highScore = Math.max(prevBest, n);
 
-  if (isNewRecord) {
+  if (!TEST_MODE && isNewRecord) {
     setStoredCatchHighScore(n);
     if (ME && ME.user) ME.user.catchGabbyHighScore = n;
   }
 
-  try {
-    const data = await api('POST', '/api/me/catch-gabby', { score: n });
-    if (data.isNewRecord) isNewRecord = true;
-    highScore = Math.max(highScore, data.highScore || 0);
-    if (ME && data.user) ME.user = data.user;
-    if (ME && ME.user) ME.user.catchGabbyHighScore = highScore;
-    setStoredCatchHighScore(highScore);
-  } catch (_) {
-    // Local cache already updated; celebration still uses isNewRecord above.
+  if (!TEST_MODE) {
+    try {
+      const data = await api('POST', '/api/me/catch-gabby', { score: n });
+      if (data.isNewRecord) isNewRecord = true;
+      highScore = Math.max(highScore, data.highScore || 0);
+      if (ME && data.user) ME.user = data.user;
+      if (ME && ME.user) ME.user.catchGabbyHighScore = highScore;
+      setStoredCatchHighScore(highScore);
+    } catch (_) {
+      // Local cache already updated; celebration still uses isNewRecord above.
+    }
   }
 
   const result = $('mini-game-result');
@@ -4170,8 +4496,8 @@ async function finishCatchGabbyMiniGame() {
     else if (n < 8) result.textContent = `Nice — ${n} catch${n === 1 ? '' : 'es'}!`;
     else if (n < 20) result.textContent = `Awesome — ${n} catches!!`;
     else result.textContent = `Unstoppable — ${n} catches!!!`;
-    if (highScore > 0) result.textContent += ` · Best ${highScore}`;
-    $('mini-game-title').textContent = 'Round over!';
+    if (highScore > 0 && !TEST_MODE) result.textContent += ` · Best ${highScore}`;
+    $('mini-game-title').textContent = TEST_MODE ? 'Test run!' : 'Round over!';
     if (!soundMuted) sounds.fanfare();
     confettiBurst();
     startFx();
@@ -4188,6 +4514,257 @@ function continueAfterCatchGabby() {
   $('mini-game').classList.remove('active');
   $('mini-game-continue').classList.remove('active');
   if (typeof done === 'function') done();
+}
+
+function hideMinigamePicker() {
+  const el = $('mini-game-pick');
+  if (el) el.classList.remove('active');
+}
+
+function showMinigamePicker() {
+  stopCatchGabbyMiniGame(true);
+  stopGabbyDash(true);
+  hideMinigamePicker();
+  $('mini-game-pick').classList.add('active');
+}
+
+function pickCatchGabby() {
+  hideMinigamePicker();
+  startCatchGabbyMiniGame();
+}
+
+function pickGabbyDash() {
+  hideMinigamePicker();
+  startGabbyDash();
+}
+
+/* ---------- Gabby Dash (3-lane runner, Chrome-dino style) ---------- */
+const DASH_HITS = ['🪨', '🚧', '📦', '🌵', '💣', '🪵'];
+const gabbyDash = {
+  active: false,
+  over: false,
+  lane: 1,
+  score: 0,
+  elapsed: 0,
+  speed: 240,
+  nextSpawn: 0,
+  lastLevelAt: 0,
+  hits: [],
+  raf: 0,
+  lastTs: 0,
+};
+
+function dashLaneX(lane, stageW) {
+  return ((lane + 0.5) / 3) * stageW;
+}
+
+function layoutGabbyDashPlayer() {
+  const stage = $('lane-dash-stage');
+  const player = $('lane-dash-player');
+  if (!stage || !player) return;
+  player.style.left = dashLaneX(gabbyDash.lane, stage.clientWidth) + 'px';
+}
+
+function clearGabbyDashHits() {
+  gabbyDash.hits.forEach((h) => { try { h.el.remove(); } catch (_) {} });
+  gabbyDash.hits = [];
+}
+
+function stopGabbyDash(silent = false) {
+  gabbyDash.active = false;
+  gabbyDash.over = false;
+  if (gabbyDash.raf) {
+    cancelAnimationFrame(gabbyDash.raf);
+    gabbyDash.raf = 0;
+  }
+  clearGabbyDashHits();
+  const wrap = $('lane-dash');
+  if (wrap) wrap.classList.remove('active', 'over');
+  const result = $('lane-dash-result');
+  if (result) { result.hidden = true; result.textContent = ''; }
+  const cont = $('lane-dash-continue');
+  if (cont) cont.classList.remove('active');
+  const hint = $('lane-dash-hint');
+  if (hint) hint.hidden = false;
+  if (music.mode === 'dash') music.set(null);
+}
+
+function spawnDashHit(stage) {
+  const w = stage.clientWidth;
+  const size = Math.round(Math.min(64, Math.max(48, w * 0.14)));
+  let lanes;
+  if (Math.random() < 0.32) {
+    const blocked = [0, 1, 2].sort(() => Math.random() - 0.5).slice(0, 2);
+    lanes = blocked;
+  } else {
+    lanes = [Math.floor(Math.random() * 3)];
+  }
+  for (const lane of lanes) {
+    const el = document.createElement('div');
+    el.className = 'lane-dash-hit';
+    el.textContent = pick(DASH_HITS);
+    el.style.width = size + 'px';
+    el.style.height = size + 'px';
+    el.style.marginLeft = (-size / 2) + 'px';
+    el.style.left = dashLaneX(lane, w) + 'px';
+    el.style.top = (-size) + 'px';
+    stage.appendChild(el);
+    gabbyDash.hits.push({ el, lane, y: -size, size, scored: false });
+  }
+}
+
+function moveGabbyDash(dir) {
+  if (!gabbyDash.active || gabbyDash.over) return;
+  gabbyDash.lane = Math.max(0, Math.min(2, gabbyDash.lane + dir));
+  layoutGabbyDashPlayer();
+}
+
+function onGabbyDashPointer(e) {
+  if (!gabbyDash.active || gabbyDash.over) return;
+  const stage = $('lane-dash-stage');
+  if (!stage) return;
+  const rect = stage.getBoundingClientRect();
+  const x = (e.clientX != null ? e.clientX : (e.touches && e.touches[0] && e.touches[0].clientX)) - rect.left;
+  moveGabbyDash(x < rect.width / 2 ? -1 : 1);
+}
+
+function gabbyDashLoop(ts) {
+  if (!gabbyDash.active) return;
+  gabbyDash.raf = requestAnimationFrame(gabbyDashLoop);
+  if (gabbyDash.over) return;
+  const last = gabbyDash.lastTs || ts;
+  const dt = Math.min(0.05, Math.max(0.001, (ts - last) / 1000));
+  gabbyDash.lastTs = ts;
+  gabbyDash.elapsed += dt;
+
+  if (gabbyDash.elapsed - gabbyDash.lastLevelAt >= 5) {
+    gabbyDash.lastLevelAt = gabbyDash.elapsed;
+    gabbyDash.speed *= 1.18;
+    music.refreshDashTempo();
+  }
+
+  gabbyDash.score += dt * gabbyDash.speed * 0.08;
+  $('lane-dash-score').textContent = String(Math.floor(gabbyDash.score));
+
+  const stage = $('lane-dash-stage');
+  const sh = stage.clientHeight;
+  const playerH = 72;
+  const playerTop = sh - 10 - playerH;
+  const playerBot = sh - 10;
+
+  gabbyDash.nextSpawn -= dt;
+  if (gabbyDash.nextSpawn <= 0) {
+    spawnDashHit(stage);
+    const gap = Math.max(0.55, 1.45 - gabbyDash.elapsed * 0.04);
+    gabbyDash.nextSpawn = gap;
+  }
+
+  const still = [];
+  for (const hit of gabbyDash.hits) {
+    hit.y += gabbyDash.speed * dt;
+    hit.el.style.top = hit.y + 'px';
+    const hitBot = hit.y + hit.size;
+    if (hit.lane === gabbyDash.lane && hitBot > playerTop + 10 && hit.y < playerBot - 8) {
+      endGabbyDash();
+      return;
+    }
+    if (hitBot > sh) {
+      try { hit.el.remove(); } catch (_) {}
+      continue;
+    }
+    still.push(hit);
+  }
+  gabbyDash.hits = still;
+}
+
+function startGabbyDash() {
+  stopGabbyDash(true);
+  gabbyDash.active = true;
+  gabbyDash.over = false;
+  gabbyDash.lane = 1;
+  gabbyDash.score = 0;
+  gabbyDash.elapsed = 0;
+  gabbyDash.speed = 240;
+  gabbyDash.nextSpawn = 0.7;
+  gabbyDash.lastLevelAt = 0;
+  gabbyDash.lastTs = 0;
+  $('lane-dash-score').textContent = '0';
+  $('lane-dash-title').textContent = 'Gabby Dash!';
+  $('lane-dash-result').hidden = true;
+  $('lane-dash-continue').classList.remove('active');
+  $('lane-dash-hint').hidden = false;
+  $('lane-dash').classList.add('active');
+  $('lane-dash').classList.remove('over');
+  requestAnimationFrame(() => {
+    layoutGabbyDashPlayer();
+    if (gabbyDash.active) gabbyDash.raf = requestAnimationFrame(gabbyDashLoop);
+  });
+  if (!soundMuted) sounds.goBeep();
+  music.set('dash');
+}
+
+async function endGabbyDash() {
+  if (!gabbyDash.active || gabbyDash.over) return;
+  gabbyDash.over = true;
+  gabbyDash.active = false;
+  if (music.mode === 'dash') music.set(null);
+  if (gabbyDash.raf) {
+    cancelAnimationFrame(gabbyDash.raf);
+    gabbyDash.raf = 0;
+  }
+  $('lane-dash').classList.add('over');
+  $('lane-dash-hint').hidden = true;
+
+  const n = Math.floor(gabbyDash.score);
+  const prevBest = effectiveGabbyDashHighScore();
+  let isNewRecord = !TEST_MODE && n > prevBest;
+  let highScore = Math.max(prevBest, n);
+
+  if (!TEST_MODE && isNewRecord) {
+    setStoredGabbyDashHighScore(n);
+    if (ME && ME.user) ME.user.gabbyDashHighScore = n;
+  }
+  if (!TEST_MODE) {
+    try {
+      const data = await api('POST', '/api/me/gabby-dash', { score: n });
+      if (data.isNewRecord) isNewRecord = true;
+      highScore = Math.max(highScore, data.highScore || 0);
+      if (ME && data.user) ME.user = data.user;
+      if (ME && ME.user) ME.user.gabbyDashHighScore = highScore;
+      setStoredGabbyDashHighScore(highScore);
+    } catch (_) {}
+  }
+
+  const result = $('lane-dash-result');
+  result.hidden = false;
+  if (TEST_MODE) {
+    $('lane-dash-title').textContent = 'Crash!';
+    result.textContent = `Score ${n} · test run (not saved)`;
+    if (!soundMuted) sounds.fanfare();
+    confettiBurst();
+    startFx();
+  } else if (isNewRecord) {
+    $('lane-dash-title').textContent = 'New high score!!';
+    result.textContent = `NEW RECORD — ${n}!!`;
+    playCatchGabbyRecordCelebration();
+  } else {
+    $('lane-dash-title').textContent = 'Crash!';
+    result.textContent = n < 40
+      ? `Oof — ${n} points`
+      : n < 120
+        ? `Nice dash — ${n}!`
+        : `Speedy — ${n}!!`;
+    if (highScore > 0) result.textContent += ` · Best ${highScore}`;
+    if (!soundMuted) sounds.fanfare();
+    confettiBurst();
+    startFx();
+  }
+  $('lane-dash-continue').classList.add('active');
+}
+
+function continueAfterGabbyDash() {
+  endDailyGoalPartyFx();
+  stopGabbyDash(true);
 }
 
 /** Star stamp first, then the big daily-goal party, then Catch Gabby. */
@@ -6013,6 +6590,9 @@ function resumeSessionFromTopbar() {
 }
 
 function goHome() {
+  stopCatchGabbyMiniGame(true);
+  stopGabbyDash(true);
+  hideMinigamePicker();
   leaveSessionScreen();
   renderStartScreen();
   showScreen('start');
@@ -6032,10 +6612,40 @@ $('btn-celebration-next').addEventListener('click', () => {
 });
 $('mini-game-stage').addEventListener('pointerdown', onCatchGabbyTap);
 $('mini-game-continue').addEventListener('click', continueAfterCatchGabby);
+$('btn-pick-catch').addEventListener('click', pickCatchGabby);
+$('btn-pick-dash').addEventListener('click', pickGabbyDash);
+$('btn-test-catch').addEventListener('click', () => {
+  hideMinigamePicker();
+  startCatchGabbyMiniGame();
+});
+$('btn-test-dash').addEventListener('click', () => {
+  hideMinigamePicker();
+  startGabbyDash();
+});
+$('lane-dash-stage').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  onGabbyDashPointer(e);
+});
+$('lane-dash-continue').addEventListener('click', continueAfterGabbyDash);
 syncMuteButtons();
 
 document.addEventListener('keydown', (e) => {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  if (gabbyDash.active && !gabbyDash.over) {
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+      e.preventDefault();
+      moveGabbyDash(-1);
+      return;
+    }
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+      e.preventDefault();
+      moveGabbyDash(1);
+      return;
+    }
+  }
+  if ($('lane-dash').classList.contains('active')
+    || $('mini-game').classList.contains('active')
+    || $('mini-game-pick').classList.contains('active')) return;
   if (e.code === 'Space' || e.key === ' ') {
     e.preventDefault();
     if (state.between) {
@@ -6335,6 +6945,11 @@ function renderStartScreen() {
   $('profile-high-score').innerHTML = highScore > 0
     ? `Catch Gabby best: <strong>${highScore}</strong>`
     : 'Catch Gabby best: <strong>—</strong>';
+  const dashHighScore = effectiveGabbyDashHighScore();
+  if (ME.user) ME.user.gabbyDashHighScore = dashHighScore;
+  $('profile-dash-score').innerHTML = dashHighScore > 0
+    ? `Gabby Dash best: <strong>${dashHighScore}</strong>`
+    : 'Gabby Dash best: <strong>—</strong>';
   const googooHighScore = effectiveGoogooHighScore();
   if (ME.user) ME.user.googooHighScore = googooHighScore;
   $('profile-googoo-score').innerHTML = googooHighScore > 0
@@ -6454,27 +7069,49 @@ function syncBonusVideoSourceChoice() {
   if (input && document.activeElement !== input) input.value = giphyQuery;
 }
 
+let giphyQuerySaveTimer = null;
+
+function setGiphySaveButton(label, { saved = false, busy = false } = {}) {
+  const btn = $('btn-giphy-query-save');
+  if (!btn) return;
+  btn.textContent = label;
+  btn.disabled = busy;
+  btn.classList.toggle('is-saved', saved);
+  btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+}
+
+function flashGiphySaved() {
+  setGiphySaveButton('Saved', { saved: true });
+  if (giphyQuerySaveTimer) clearTimeout(giphyQuerySaveTimer);
+  giphyQuerySaveTimer = setTimeout(() => {
+    giphyQuerySaveTimer = null;
+    setGiphySaveButton('Save');
+  }, 1600);
+}
+
 async function saveGiphyQuery() {
   if (!ME) return;
   const input = $('giphy-query-input');
   if (!input) return;
   const next = normalizeGiphyQuery(input.value);
   input.value = next;
-  if (next === giphyQuery) return;
+  if (next === giphyQuery) {
+    flashGiphySaved();
+    return;
+  }
   const prev = giphyQuery;
   giphyQuery = next;
-  const btn = $('btn-giphy-query-save');
-  if (btn) btn.disabled = true;
+  setGiphySaveButton('Saving…', { busy: true });
   try {
     const data = await api('PATCH', '/api/me', { giphyQuery: next });
     ME.user = data.user;
     applyUserSettings(ME.user);
+    flashGiphySaved();
   } catch (err) {
     giphyQuery = prev;
     if (input) input.value = prev;
+    setGiphySaveButton('Save');
     alert(err.message || 'Could not save GIPHY search');
-  } finally {
-    if (btn) btn.disabled = false;
   }
 }
 
@@ -6604,6 +7241,7 @@ async function refreshMe() {
     ME = await api('GET', `/api/me?date=${localDateStr()}`);
     await syncCatchGabbyHighScore();
     await syncGoogooHighScore();
+    await syncGabbyDashHighScore();
     await migrateLocalSettingsOnce();
     renderStartScreen();
   } catch (_) {}
@@ -6638,6 +7276,7 @@ async function enterApp() {
   applyConfig(scheme.config);
   await syncCatchGabbyHighScore();
   await syncGoogooHighScore();
+  await syncGabbyDashHighScore();
   await migrateLocalSettingsOnce();
   renderStartScreen();
   showScreen('start');
