@@ -642,19 +642,23 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 56px;
-    height: 56px;
-    margin-left: -28px;
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2rem;
-    background: #fff;
-    border: 3px solid #fb7185;
-    box-shadow: 0 6px 14px rgba(0,0,0,0.3);
+    width: 72px;
+    height: 72px;
+    margin-left: -36px;
+    background: none;
+    border: none;
+    box-shadow: none;
     z-index: 1;
     will-change: top;
+    pointer-events: none;
+  }
+  .lane-dash-hit img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    pointer-events: none;
+    filter: drop-shadow(0 8px 12px rgba(0,0,0,0.45));
   }
   #lane-dash-hint {
     font-size: 0.95rem;
@@ -2401,6 +2405,7 @@ const music = {
     this._stopBed();
     this._stopRest();
     this.mode = mode;
+    if (mode === 'catch' || mode === 'dash') this.paused = false;
     if (mode === 'rest') this._startRestBed();
     else if (mode === 'catch') this._startCatchBed();
     else if (mode === 'dash') this._startDashBed();
@@ -2447,9 +2452,9 @@ const music = {
     }
     if (this.master && (this.mode === 'work' || this.mode === 'catch' || this.mode === 'dash')) {
       const ac = ctx();
-      const vol = this.mode === 'dash' ? 0.2 : 0.18;
+      const vol = this.mode === 'dash' || this.mode === 'catch' ? 0.5 : 0.18;
       this.master.gain.cancelScheduledValues(ac.currentTime);
-      this.master.gain.setTargetAtTime(vol, ac.currentTime, 0.08);
+      this.master.gain.setValueAtTime(vol, ac.currentTime);
     }
   },
 
@@ -2548,7 +2553,7 @@ const music = {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(140, t0);
     osc.frequency.exponentialRampToValueAtTime(45, t0 + 0.12);
-    g.gain.setValueAtTime(0.28, t0);
+    g.gain.setValueAtTime(this.mode === 'catch' || this.mode === 'dash' ? 0.55 : 0.28, t0);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
     osc.connect(g).connect(this.master);
     osc.start(t0);
@@ -2587,13 +2592,16 @@ const music = {
     this.bedStep++;
   },
 
+  _armGameBed(vol) {
+    this.paused = false;
+    const ac = this.ensureMaster();
+    if (ac.state === 'suspended') ac.resume();
+    this.master.gain.cancelScheduledValues(ac.currentTime);
+    this.master.gain.setValueAtTime(this.isSilent() ? 0.0001 : vol, ac.currentTime);
+  },
+
   _startCatchBed() {
-    this.ensureMaster();
-    if (!this.isSilent()) {
-      const ac = ctx();
-      this.master.gain.cancelScheduledValues(ac.currentTime);
-      this.master.gain.setTargetAtTime(0.2, ac.currentTime, 0.05);
-    }
+    this._armGameBed(0.52);
     this.bedStep = 0;
     this._clearBedTimer();
     this.bedTimer = setInterval(() => this._catchBedTick(), 210);
@@ -2605,23 +2613,18 @@ const music = {
     if (this.isSilent() || this.mode !== 'catch') return;
     const beat = this.bedStep % 16;
     if (beat === 0 || beat === 3 || beat === 8 || beat === 11) this._bedKick();
-    if (beat === 4 || beat === 12) this._bedNoise(0.04, 0.07);
-    if (beat % 2 === 1) this._bedNoise(0.012, 0.025);
+    if (beat === 4 || beat === 12) this._bedNoise(0.05, 0.12);
+    if (beat % 2 === 1) this._bedNoise(0.015, 0.05);
     const bass = [130.8, 0, 164.8, 196, 164.8, 0, 196, 220, 130.8, 0, 164.8, 196, 146.8, 164.8, 196, 261.6];
-    if (bass[beat]) this._bedNote(bass[beat], 0.16, { type: 'triangle', vol: 0.14 });
+    if (bass[beat]) this._bedNote(bass[beat], 0.18, { type: 'triangle', vol: 0.32 });
     const hop = [659.3, 783.9, 659.3, 523.3, 784, 987.8, 784, 659.3, 523.3, 659.3, 784, 1046.5, 784, 659.3, 587.3, 659.3];
-    this._bedNote(hop[beat], 0.09, { type: 'triangle', vol: 0.055 });
-    if (beat === 7 || beat === 15) this._bedNote(1318.5, 0.07, { type: 'sine', vol: 0.05 });
+    this._bedNote(hop[beat], 0.12, { type: 'triangle', vol: 0.16 });
+    if (beat === 7 || beat === 15) this._bedNote(1318.5, 0.1, { type: 'sine', vol: 0.12 });
     this.bedStep++;
   },
 
   _startDashBed() {
-    this.ensureMaster();
-    if (!this.isSilent()) {
-      const ac = ctx();
-      this.master.gain.cancelScheduledValues(ac.currentTime);
-      this.master.gain.setTargetAtTime(0.22, ac.currentTime, 0.05);
-    }
+    this._armGameBed(0.55);
     this.bedStep = 0;
     this._clearBedTimer();
     this._scheduleDashTimer();
@@ -2648,11 +2651,11 @@ const music = {
     if (beat % 2 === 1) this._bedNoise(0.03, 0.05);
     if (beat === 4 || beat === 12) this._bedNoise(0.06, 0.09);
     const bass = [110, 110, 110, 130.8, 110, 110, 98, 82.4, 110, 110, 130.8, 146.8, 110, 98, 82.4, 98];
-    this._bedNote(bass[beat], 0.12, { type: 'sawtooth', vol: 0.07 });
-    this._bedNote(bass[beat] / 2, 0.14, { type: 'triangle', vol: 0.11 });
+    this._bedNote(bass[beat], 0.14, { type: 'sawtooth', vol: 0.16 });
+    this._bedNote(bass[beat] / 2, 0.16, { type: 'triangle', vol: 0.28 });
     const arp = [440, 523.3, 659.3, 880, 659.3, 523.3, 392, 523.3];
-    this._bedNote(arp[beat % 8], 0.08, { type: 'square', vol: 0.04 });
-    if (beat === 0 || beat === 8) this._bedNote(1760, 0.05, { type: 'square', vol: 0.03 });
+    this._bedNote(arp[beat % 8], 0.1, { type: 'square', vol: 0.12 });
+    if (beat === 0 || beat === 8) this._bedNote(1760, 0.06, { type: 'square', vol: 0.08 });
     this.bedStep++;
   },
 };
@@ -4591,7 +4594,7 @@ function stopGabbyDash(silent = false) {
 
 function spawnDashHit(stage) {
   const w = stage.clientWidth;
-  const size = Math.round(Math.min(64, Math.max(48, w * 0.14)));
+  const size = Math.round(Math.min(88, Math.max(64, w * 0.2)));
   let lanes;
   if (Math.random() < 0.32) {
     const blocked = [0, 1, 2].sort(() => Math.random() - 0.5).slice(0, 2);
@@ -4599,10 +4602,23 @@ function spawnDashHit(stage) {
   } else {
     lanes = [Math.floor(Math.random() * 3)];
   }
+  const arts = (typeof REPETITION_GRAPHICS !== 'undefined' && REPETITION_GRAPHICS.length)
+    ? REPETITION_GRAPHICS
+    : null;
   for (const lane of lanes) {
     const el = document.createElement('div');
     el.className = 'lane-dash-hit';
-    el.textContent = pick(DASH_HITS);
+    if (arts) {
+      const img = document.createElement('img');
+      img.src = encodeURI(pick(arts));
+      img.alt = '';
+      el.appendChild(img);
+    } else {
+      el.textContent = pick(DASH_HITS);
+      el.style.fontSize = Math.round(size * 0.85) + 'px';
+      el.style.lineHeight = '1';
+      el.style.textAlign = 'center';
+    }
     el.style.width = size + 'px';
     el.style.height = size + 'px';
     el.style.marginLeft = (-size / 2) + 'px';
@@ -4643,8 +4659,8 @@ function gabbyDashLoop(ts) {
     music.refreshDashTempo();
   }
 
-  gabbyDash.score += dt * gabbyDash.speed * 0.08;
-  $('lane-dash-score').textContent = String(Math.floor(gabbyDash.score));
+  gabbyDash.score = Math.floor(gabbyDash.elapsed);
+  $('lane-dash-score').textContent = String(gabbyDash.score);
 
   const stage = $('lane-dash-stage');
   const sh = stage.clientHeight;
