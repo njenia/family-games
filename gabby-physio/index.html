@@ -3659,33 +3659,19 @@ function getStoredCatchHighScore() {
 
 function setStoredCatchHighScore(score) {
   const key = catchGabbyHsKey();
-  if (!key || !(score > 0)) return;
-  localStorage.setItem(key, String(Math.floor(score)));
+  if (!key) return;
+  localStorage.setItem(key, String(Math.max(0, Math.floor(score))));
 }
 
-/** Best of server profile + local cache (works even before DB migration). */
+/** Profile value from the server; localStorage is only a cache / offline fallback. */
 function effectiveCatchHighScore() {
-  return Math.max((ME && ME.user && ME.user.catchGabbyHighScore) || 0, getStoredCatchHighScore());
+  if (ME && ME.user) return ME.user.catchGabbyHighScore || 0;
+  return getStoredCatchHighScore();
 }
 
 async function syncCatchGabbyHighScore() {
   if (!ME || !ME.user) return;
-  const local = getStoredCatchHighScore();
-  const server = ME.user.catchGabbyHighScore || 0;
-  const best = Math.max(local, server);
-  if (best > local) setStoredCatchHighScore(best);
-  if (best > server) {
-    try {
-      const data = await api('POST', '/api/me/catch-gabby', { score: best });
-      if (data.user) ME.user = data.user;
-      setStoredCatchHighScore(Math.max(best, data.highScore || 0));
-    } catch (_) {
-      // Keep the local best if the server column isn't available yet.
-      ME.user.catchGabbyHighScore = best;
-    }
-  } else {
-    ME.user.catchGabbyHighScore = best;
-  }
+  setStoredCatchHighScore(ME.user.catchGabbyHighScore || 0);
 }
 
 /* ---------- Googoo game high score (session score kept in state.googooScore) ---------- */
@@ -3702,33 +3688,19 @@ function getStoredGoogooHighScore() {
 
 function setStoredGoogooHighScore(score) {
   const key = googooHsKey();
-  if (!key || !(score > 0)) return;
-  localStorage.setItem(key, String(Math.floor(score)));
+  if (!key) return;
+  localStorage.setItem(key, String(Math.max(0, Math.floor(score))));
 }
 
-/** Best of server profile + local cache (works even before DB migration). */
+/** Profile value from the server; localStorage is only a cache / offline fallback. */
 function effectiveGoogooHighScore() {
-  return Math.max((ME && ME.user && ME.user.googooHighScore) || 0, getStoredGoogooHighScore());
+  if (ME && ME.user) return ME.user.googooHighScore || 0;
+  return getStoredGoogooHighScore();
 }
 
 async function syncGoogooHighScore() {
   if (!ME || !ME.user) return;
-  const local = getStoredGoogooHighScore();
-  const server = ME.user.googooHighScore || 0;
-  const best = Math.max(local, server);
-  if (best > local) setStoredGoogooHighScore(best);
-  if (best > server) {
-    try {
-      const data = await api('POST', '/api/me/googoo', { score: best });
-      if (data.user) ME.user = data.user;
-      setStoredGoogooHighScore(Math.max(best, data.highScore || 0));
-    } catch (_) {
-      // Keep the local best if the server column isn't available yet.
-      ME.user.googooHighScore = best;
-    }
-  } else {
-    ME.user.googooHighScore = best;
-  }
+  setStoredGoogooHighScore(ME.user.googooHighScore || 0);
 }
 
 /** Big party when a Googoo session beats the personal best (finish screen). */
