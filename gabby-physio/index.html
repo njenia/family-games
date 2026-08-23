@@ -1236,6 +1236,7 @@
   }
   .settings-sublabel + .settings-stepper { margin-top: 2px; }
   .settings-stepper + .settings-sublabel { margin-top: 12px; }
+  .settings-choice-row + #giphy-query-details { margin-top: 8px; }
   .settings-word-row {
     display: flex;
     align-items: stretch;
@@ -1296,6 +1297,12 @@
     gap: 10px;
   }
   #googoo-settings-details[hidden] { display: none; }
+  #giphy-query-details {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  #giphy-query-details[hidden] { display: none; }
   .settings-choice-row {
     display: flex;
     flex-wrap: wrap;
@@ -1744,6 +1751,14 @@
         <button type="button" class="settings-choice" data-bonus-source="raccoon" aria-pressed="false">Raccoons</button>
         <button type="button" class="settings-choice" data-bonus-source="bunny" aria-pressed="false">Cute animals</button>
       </div>
+      <div id="giphy-query-details" hidden>
+        <div class="settings-sublabel">GIPHY search</div>
+        <p class="settings-hint">What to search for each time a cute-animal GIF plays.</p>
+        <div class="settings-word-row">
+          <input id="giphy-query-input" type="text" maxlength="80" autocomplete="off" spellcheck="false" aria-label="GIPHY search query">
+          <button type="button" id="btn-giphy-query-save">Save</button>
+        </div>
+      </div>
     </div>
     <div class="settings-card">
       <div class="section-label">Googoo game</div>
@@ -1902,11 +1917,14 @@ const RACCOON_VID_URL = 'https://api.mapach.es/v1/vid';
 const GIPHY_FETCH_API_URL = 'https://cdn.jsdelivr.net/npm/@giphy/js-fetch-api@5/+esm';
 const BONUS_VIDEO_SOURCE_VALUES = ['custom', 'raccoon', 'bunny'];
 const GIPHY_GIF_SHOW_MS = 6000;
+const GIPHY_QUERY_DEFAULT = 'cute animal';
+const GIPHY_QUERY_MAX = 80;
 let soundMuted = false;
 let skipExercisePreview = false;
 let googooEnabled = true;
 /** @type {Array<'custom' | 'raccoon' | 'bunny'>} */
 let bonusVideoSources = ['custom'];
+let giphyQuery = GIPHY_QUERY_DEFAULT;
 let giphyApiKey = null;
 let giphyFetch = null;
 
@@ -1915,6 +1933,11 @@ function normalizeBonusVideoSources(list) {
     ? [...new Set(list.filter((s) => BONUS_VIDEO_SOURCE_VALUES.includes(s)))]
     : [];
   return clean.length ? clean : ['custom'];
+}
+
+function normalizeGiphyQuery(q) {
+  const clean = String(q || '').replace(/\s+/g, ' ').trim();
+  return clean.length >= 1 && clean.length <= GIPHY_QUERY_MAX ? clean : GIPHY_QUERY_DEFAULT;
 }
 
 try { soundMuted = localStorage.getItem(SOUND_MUTE_KEY) === '1'; } catch (_) {}
@@ -1955,6 +1978,7 @@ function applyUserSettings(user) {
     if (ME && ME.user) ME.user.googooEnabled = googooEnabled;
   }
   bonusVideoSources = normalizeBonusVideoSources(user.bonusVideoSources);
+  giphyQuery = normalizeGiphyQuery(user.giphyQuery);
   googooPauseMs = clampGoogooPauseMs(
     user.googooPauseMs == null ? GOOGOO_PAUSE_DEFAULT_MS : user.googooPauseMs
   );
@@ -4737,7 +4761,8 @@ async function playCuteAnimalGifOnce() {
     const gf = await getGiphyFetch();
     // Fresh search every celebration; random offset for variety.
     const offset = Math.floor(Math.random() * 40);
-    const { data } = await gf.search('cute animal', {
+    const query = normalizeGiphyQuery(giphyQuery);
+    const { data } = await gf.search(query, {
       limit: 25,
       offset,
       rating: 'g',
@@ -4745,7 +4770,7 @@ async function playCuteAnimalGifOnce() {
       sort: 'relevant',
     });
     if (!data || !data.length) {
-      console.warn('No GIPHY results for cute animal');
+      console.warn('No GIPHY results for', query);
       return;
     }
     const gif = data[Math.floor(Math.random() * data.length)];
@@ -6346,6 +6371,13 @@ $('btn-toggle-googoo').addEventListener('click', toggleGoogooEnabled);
 document.querySelectorAll('.settings-choice[data-bonus-source]').forEach((btn) => {
   btn.addEventListener('click', () => toggleBonusVideoSource(btn.dataset.bonusSource));
 });
+$('btn-giphy-query-save').addEventListener('click', saveGiphyQuery);
+$('giphy-query-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    saveGiphyQuery();
+  }
+});
 
 function syncPreviewToggle() {
   const btn = $('btn-toggle-preview');
@@ -6416,6 +6448,34 @@ function syncBonusVideoSourceChoice() {
     const on = bonusVideoSources.includes(btn.dataset.bonusSource);
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
+  const details = $('giphy-query-details');
+  if (details) details.hidden = !bonusVideoSources.includes('bunny');
+  const input = $('giphy-query-input');
+  if (input && document.activeElement !== input) input.value = giphyQuery;
+}
+
+async function saveGiphyQuery() {
+  if (!ME) return;
+  const input = $('giphy-query-input');
+  if (!input) return;
+  const next = normalizeGiphyQuery(input.value);
+  input.value = next;
+  if (next === giphyQuery) return;
+  const prev = giphyQuery;
+  giphyQuery = next;
+  const btn = $('btn-giphy-query-save');
+  if (btn) btn.disabled = true;
+  try {
+    const data = await api('PATCH', '/api/me', { giphyQuery: next });
+    ME.user = data.user;
+    applyUserSettings(ME.user);
+  } catch (err) {
+    giphyQuery = prev;
+    if (input) input.value = prev;
+    alert(err.message || 'Could not save GIPHY search');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function toggleBonusVideoSource(source) {

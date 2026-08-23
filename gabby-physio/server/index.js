@@ -50,6 +50,8 @@ function defaultSchemeConfig() {
 const BONUS_VIDEO_SOURCE_VALUES = ['custom', 'raccoon', 'bunny'];
 const GOOGOO_WORD_DEFAULT = 'bingo';
 const GOOGOO_LOUDNESS_DEFAULT = 5;
+const GIPHY_QUERY_DEFAULT = 'cute animal';
+const GIPHY_QUERY_MAX = 80;
 
 function normalizeBonusVideoSources(list) {
   const clean = Array.isArray(list)
@@ -70,6 +72,12 @@ function normalizeGoogooLoudness(n) {
   return v;
 }
 
+/** Trim, collapse spaces, cap length. Empty / invalid → default cute-animal query. */
+function normalizeGiphyQuery(q) {
+  const clean = String(q || '').replace(/\s+/g, ' ').trim();
+  return clean.length >= 1 && clean.length <= GIPHY_QUERY_MAX ? clean : GIPHY_QUERY_DEFAULT;
+}
+
 function publicUser(profile) {
   return {
     id: profile.user_id,
@@ -81,6 +89,7 @@ function publicUser(profile) {
     googooHighScore: profile.googoo_high_score || 0,
     skipExercisePreview: !!profile.skip_exercise_preview,
     bonusVideoSources: normalizeBonusVideoSources(profile.bonus_video_sources),
+    giphyQuery: normalizeGiphyQuery(profile.giphy_query),
     googooPauseMs: profile.googoo_pause_ms == null ? 2200 : profile.googoo_pause_ms,
     googooGapMs: profile.googoo_gap_ms == null ? 6500 : profile.googoo_gap_ms,
     googooWord: normalizeGoogooWord(profile.googoo_word),
@@ -291,6 +300,7 @@ app.patch('/api/me', requireAuth, wrap(async (req, res) => {
     displayName,
     skipExercisePreview,
     bonusVideoSources,
+    giphyQuery,
     googooPauseMs,
     googooGapMs,
     googooWord,
@@ -322,6 +332,15 @@ app.patch('/api/me', requireAuth, wrap(async (req, res) => {
       });
     }
     patch.bonus_video_sources = normalizeBonusVideoSources(bonusVideoSources);
+  }
+  if (giphyQuery !== undefined) {
+    const cleaned = String(giphyQuery || '').replace(/\s+/g, ' ').trim();
+    if (!(cleaned.length >= 1 && cleaned.length <= GIPHY_QUERY_MAX)) {
+      return res.status(400).json({
+        error: `giphyQuery must be 1–${GIPHY_QUERY_MAX} characters`,
+      });
+    }
+    patch.giphy_query = cleaned;
   }
   if (googooPauseMs !== undefined) {
     const pause = parseInt(googooPauseMs, 10);

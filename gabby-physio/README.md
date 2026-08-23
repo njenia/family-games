@@ -15,7 +15,8 @@ tracking (Supabase Postgres).
    game personal best), then `0007_googoo_timing_settings.sql` (Googoo freeze
    length + gap between freezes), then `0008_googoo_word.sql` (Googoo trigger
    word), then `0009_googoo_loudness.sql` (Googoo loud-sound threshold), then
-   `0010_googoo_enabled.sql` (toggle Googoo game on/off).
+   `0010_googoo_enabled.sql` (toggle Googoo game on/off), then
+   `0011_giphy_query.sql` (search query for cute-animal GIPHY GIFs).
 2. **Environment**: copy `.env.example` to `.env` and fill in `SUPABASE_URL`,
    `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (Project Settings → API Keys),
    and `GIPHY_API_KEY` (https://developers.giphy.com/dashboard/) for cute-animal
