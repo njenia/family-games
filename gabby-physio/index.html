@@ -4542,7 +4542,7 @@ function pickGabbyDash() {
 }
 
 /* ---------- Gabby Dash (3-lane runner, Chrome-dino style) ---------- */
-const DASH_HITS = ['🪨', '🚧', '📦', '🌵', '💣', '🪵'];
+const GABBY_DASH_OBSTACLE = 'graphics/repititions/bunny1.png';
 const gabbyDash = {
   active: false,
   over: false,
@@ -4602,23 +4602,13 @@ function spawnDashHit(stage) {
   } else {
     lanes = [Math.floor(Math.random() * 3)];
   }
-  const arts = (typeof REPETITION_GRAPHICS !== 'undefined' && REPETITION_GRAPHICS.length)
-    ? REPETITION_GRAPHICS
-    : null;
   for (const lane of lanes) {
     const el = document.createElement('div');
     el.className = 'lane-dash-hit';
-    if (arts) {
-      const img = document.createElement('img');
-      img.src = encodeURI(pick(arts));
-      img.alt = '';
-      el.appendChild(img);
-    } else {
-      el.textContent = pick(DASH_HITS);
-      el.style.fontSize = Math.round(size * 0.85) + 'px';
-      el.style.lineHeight = '1';
-      el.style.textAlign = 'center';
-    }
+    const img = document.createElement('img');
+    img.src = encodeURI(GABBY_DASH_OBSTACLE);
+    img.alt = '';
+    el.appendChild(img);
     el.style.width = size + 'px';
     el.style.height = size + 'px';
     el.style.marginLeft = (-size / 2) + 'px';
