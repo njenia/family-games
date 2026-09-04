@@ -52,12 +52,42 @@ const GOOGOO_WORD_DEFAULT = 'bingo';
 const GOOGOO_LOUDNESS_DEFAULT = 5;
 const GIPHY_QUERY_DEFAULT = 'cute animal';
 const GIPHY_QUERY_MAX = 80;
+const SESSION_MODE_VALUES = ['full', 'one_exercise'];
+const DEFAULT_EXERCISE_DAILY_GOALS = Object.freeze({
+  'squeeze-sponge': 3,
+  'compound-elbow': 3,
+});
 
 function normalizeBonusVideoSources(list) {
   const clean = Array.isArray(list)
     ? [...new Set(list.filter((s) => BONUS_VIDEO_SOURCE_VALUES.includes(s)))]
     : [];
   return clean.length ? clean : ['custom'];
+}
+
+function normalizeSessionMode(mode) {
+  return SESSION_MODE_VALUES.includes(mode) ? mode : 'one_exercise';
+}
+
+/** Per-exercise daily targets for one-exercise session mode (0–20 each). */
+function normalizeExerciseDailyGoals(raw) {
+  const out = { ...DEFAULT_EXERCISE_DAILY_GOALS };
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const id of Object.keys(DEFAULT_EXERCISE_DAILY_GOALS)) {
+      const n = parseInt(raw[id], 10);
+      if (Number.isFinite(n) && n >= 0 && n <= 20) out[id] = n;
+    }
+  }
+  if (Object.values(out).every((v) => v === 0)) out['squeeze-sponge'] = 1;
+  return out;
+}
+
+function effectiveDailyGoal(profile) {
+  if (normalizeSessionMode(profile.session_mode) === 'one_exercise') {
+    const goals = normalizeExerciseDailyGoals(profile.exercise_daily_goals);
+    return Math.max(1, Object.values(goals).reduce((sum, n) => sum + n, 0));
+  }
+  return profile.daily_goal;
 }
 
 /** Lowercase letters only, 2–24 chars. Falls back to the default trigger word. */
@@ -84,6 +114,8 @@ function publicUser(profile) {
     username: profile.username,
     displayName: profile.display_name,
     dailyGoal: profile.daily_goal,
+    sessionMode: normalizeSessionMode(profile.session_mode),
+    exerciseDailyGoals: normalizeExerciseDailyGoals(profile.exercise_daily_goals),
     avatarUrl: profile.avatar_url || null,
     catchGabbyHighScore: profile.catch_gabby_high_score || 0,
     googooHighScore: profile.googoo_high_score || 0,
@@ -147,6 +179,34 @@ async function todayStats(userId, localDate) {
     .eq('status', 'completed');
   if (error) throw error;
   return count || 0;
+}
+
+/** Completed-session progress for a calendar day, including per-exercise counts. */
+async function todayProgress(userId, localDate, profile) {
+  const { data, error } = await sb.from('sessions')
+    .select('exercise_id, started_at')
+    .eq('user_id', userId)
+    .eq('local_date', localDate)
+    .eq('status', 'completed')
+    .order('started_at', { ascending: true })
+    .order('id', { ascending: true });
+  if (error) throw error;
+
+  const byExercise = Object.create(null);
+  let lastExerciseId = null;
+  for (const row of data || []) {
+    if (row.exercise_id) {
+      byExercise[row.exercise_id] = (byExercise[row.exercise_id] || 0) + 1;
+      lastExerciseId = row.exercise_id;
+    }
+  }
+  return {
+    date: localDate,
+    completed: (data || []).length,
+    goal: effectiveDailyGoal(profile),
+    byExercise,
+    lastExerciseId,
+  };
 }
 
 async function totalCompletedSessions(userId) {
@@ -261,6 +321,8 @@ app.post('/api/register', wrap(async (req, res) => {
     username: name,
     display_name: String(displayName || name).trim() || name,
     daily_goal: 3,
+    session_mode: 'one_exercise',
+    exercise_daily_goals: { ...DEFAULT_EXERCISE_DAILY_GOALS },
   });
   if (pErr) {
     await sb.auth.admin.deleteUser(userId).catch(() => {});
@@ -282,14 +344,14 @@ app.get('/api/me', requireAuth, wrap(async (req, res) => {
   const date = isValidLocalDate(req.query.date)
     ? req.query.date
     : new Date().toISOString().slice(0, 10);
-  const [completed, totalSessions, week] = await Promise.all([
-    todayStats(req.user.user_id, date),
+  const [today, totalSessions, week] = await Promise.all([
+    todayProgress(req.user.user_id, date, req.user),
     totalCompletedSessions(req.user.user_id),
     weekStats(req.user.user_id, date),
   ]);
   res.json({
     user: publicUser(req.user),
-    today: { date, completed, goal: req.user.daily_goal },
+    today,
     totalSessions,
     week,
   });
@@ -299,6 +361,8 @@ app.patch('/api/me', requireAuth, wrap(async (req, res) => {
   const {
     dailyGoal,
     displayName,
+    sessionMode,
+    exerciseDailyGoals,
     skipExercisePreview,
     bonusVideoSources,
     giphyQuery,
@@ -313,6 +377,18 @@ app.patch('/api/me', requireAuth, wrap(async (req, res) => {
     const goal = parseInt(dailyGoal, 10);
     if (!(goal >= 1 && goal <= 20)) return res.status(400).json({ error: 'Daily goal must be 1-20' });
     patch.daily_goal = goal;
+  }
+  if (sessionMode !== undefined) {
+    if (!SESSION_MODE_VALUES.includes(sessionMode)) {
+      return res.status(400).json({ error: `sessionMode must be one of: ${SESSION_MODE_VALUES.join(', ')}` });
+    }
+    patch.session_mode = sessionMode;
+  }
+  if (exerciseDailyGoals !== undefined) {
+    if (!exerciseDailyGoals || typeof exerciseDailyGoals !== 'object' || Array.isArray(exerciseDailyGoals)) {
+      return res.status(400).json({ error: 'exerciseDailyGoals must be an object of exercise id → count' });
+    }
+    patch.exercise_daily_goals = normalizeExerciseDailyGoals(exerciseDailyGoals);
   }
   if (displayName !== undefined) {
     const dn = String(displayName).trim();
@@ -547,7 +623,7 @@ app.put('/api/scheme', requireAuth, wrap(async (req, res) => {
 /* ============================== sessions ============================== */
 
 app.post('/api/sessions', requireAuth, wrap(async (req, res) => {
-  const { localDate, exercisesTotal } = req.body || {};
+  const { localDate, exercisesTotal, exerciseId } = req.body || {};
   if (!isValidLocalDate(localDate)) {
     return res.status(400).json({ error: 'localDate must be YYYY-MM-DD' });
   }
@@ -559,11 +635,15 @@ app.post('/api/sessions', requireAuth, wrap(async (req, res) => {
   if (abErr) throw abErr;
 
   const scheme = await activeScheme(req.user.user_id);
+  const cleanExerciseId = typeof exerciseId === 'string' && exerciseId.trim()
+    ? exerciseId.trim().slice(0, 64)
+    : null;
   const { data, error } = await sb.from('sessions').insert({
     user_id: req.user.user_id,
     scheme_id: scheme ? scheme.id : null,
     local_date: localDate,
     exercises_total: Math.max(0, parseInt(exercisesTotal, 10) || 0),
+    exercise_id: cleanExerciseId,
   }).select('id').single();
   if (error) throw error;
   res.json({ id: data.id });
@@ -596,24 +676,20 @@ app.patch('/api/sessions/:id', requireAuth, wrap(async (req, res) => {
 
   res.json({
     session: updated,
-    today: {
-      date: updated.local_date,
-      completed: await todayStats(req.user.user_id, updated.local_date),
-      goal: req.user.daily_goal,
-    },
+    today: await todayProgress(req.user.user_id, updated.local_date, req.user),
   });
 }));
 
 app.get('/api/sessions', requireAuth, wrap(async (req, res) => {
   const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 100));
   const { data, error } = await sb.from('sessions')
-    .select('id, status, local_date, exercises_total, exercises_completed, started_at, finished_at')
+    .select('id, status, local_date, exercise_id, exercises_total, exercises_completed, started_at, finished_at')
     .eq('user_id', req.user.user_id)
     .order('started_at', { ascending: false })
     .order('id', { ascending: false })
     .limit(limit);
   if (error) throw error;
-  res.json({ sessions: data, goal: req.user.daily_goal });
+  res.json({ sessions: data, goal: effectiveDailyGoal(req.user) });
 }));
 
 /* ============================== static app ============================== */

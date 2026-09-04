@@ -17,7 +17,8 @@ tracking (Supabase Postgres).
    word), then `0009_googoo_loudness.sql` (Googoo loud-sound threshold), then
    `0010_googoo_enabled.sql` (toggle Googoo game on/off), then
    `0011_giphy_query.sql` (search query for cute-animal GIPHY GIFs), then
-   `0012_gabby_dash_high_score.sql` (Gabby Dash personal best).
+   `0012_gabby_dash_high_score.sql` (Gabby Dash personal best), then
+   `0013_session_mode_goals.sql` (one-exercise sessions + per-exercise daily goals).
 2. **Environment**: copy `.env.example` to `.env` and fill in `SUPABASE_URL`,
    `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (Project Settings → API Keys),
    and `GIPHY_API_KEY` (https://developers.giphy.com/dashboard/) for cute-animal
@@ -66,11 +67,12 @@ so redeploys lose nothing.
 Defined in `supabase/migrations/0001_init.sql`:
 
 - `profiles` — one per auth user: username, display name, daily goal, optional
-  `avatar_url`
+  `avatar_url`, `session_mode` (`full` | `one_exercise`), `exercise_daily_goals`
 - `schemes` — exercise configuration per user (JSONB), `is_active` flag allows
   multiple schemes per user later
 - `sessions` — one row per workout: status (`in_progress` / `completed` /
-  `abandoned`), local date, exercises completed/total, timestamps
+  `abandoned`), local date, optional `exercise_id` (one-exercise mode),
+  exercises completed/total, timestamps
 - Storage bucket `avatars` — public profile photos uploaded via `POST /api/me/avatar`
 
 ## Maintenance

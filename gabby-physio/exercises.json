@@ -4,101 +4,51 @@
   "betweenSeconds": 8,
   "defaults": {
     "reps": 10,
-    "workSeconds": 5,
-    "restSeconds": 4
+    "workSeconds": 10,
+    "restSeconds": 3
   },
   "exercises": [
     {
-      "id": "wrist-bend",
-      "name": "Wrist Bend",
-      "hint": "Press your wrist up and hold. Relax between reps.",
-      "emoji": "↕️",
+      "id": "squeeze-sponge",
+      "name": "Squeeze Sponge",
+      "hint": "Squeeze the sponge and hold, then rest.",
+      "emoji": "🧽",
       "picture": null,
       "mode": "timed",
       "reps": 10,
-      "workSeconds": 5,
-      "restSeconds": 3
-    },
-    {
-      "id": "compound-elbow-manouvare",
-      "name": "Compound Elbow Manoeuvre",
-      "hint": "Forearm rotate, then hold elbow up, then hold elbow down. That is one rep. Rest after all three.",
-      "emoji": "🔄",
-      "picture": null,
-      "mode": "dual",
-      "reps": 10,
+      "workSeconds": 10,
       "restSeconds": 3,
-      "restVideo": "video/forarm-rotate rest.mov",
-      "phases": [
-        {
-          "label": "Forearm Rotate",
-          "seconds": 6,
-          "video": "video/forarm-rotate work.mov"
-        },
-        {
-          "label": "Hold Up",
-          "seconds": 6,
-          "video": "video/elbow-bending up.mov"
-        },
-        {
-          "label": "Hold Down",
-          "seconds": 6,
-          "video": "video/elbow-bending down.mov"
-        }
-      ]
+      "videos": {
+        "work": "video/squeeze-sponge work.mp4",
+        "rest": "video/squeeze-sponge rest.mp4"
+      }
     },
     {
-      "id": "elbow-stretch-bend",
-      "name": "Elbow Stretch Bend",
-      "hint": "Thumb facing up. Bend your elbow as far as you can — an assistant gently bends it further (no pain). Hold, then straighten briefly. That is one rep.",
+      "id": "compound-elbow",
+      "name": "Compound Elbow",
+      "hint": "Bend up, stretch the arm, then rotate. Rest between reps.",
       "emoji": "🦾",
       "picture": null,
       "mode": "dual",
-      "reps": 4,
-      "restSeconds": 0,
-      "onlyDailySessions": [2, 4],
-      "phases": [
-        { "label": "Bend Stretch", "seconds": 30 },
-        { "label": "Rest", "seconds": 5 }
-      ]
-    },
-    {
-      "id": "thumb-to-pinky",
-      "name": "Thumb to Little Finger",
-      "hint": "Touch your thumb to the base of your little finger and hold, then point the thumb straight up to the ceiling and hold. That is one rep.",
-      "emoji": "🤞",
-      "picture": null,
-      "mode": "dual",
       "reps": 10,
-      "restSeconds": 0,
+      "restSeconds": 4,
+      "restVideo": "video/compound-elbow rest.mp4",
       "phases": [
-        { "label": "Thumb to Pinky", "seconds": 5 },
-        { "label": "Thumb Up", "seconds": 5 }
-      ]
-    },
-    {
-      "id": "cup-hold",
-      "name": "Cup Hold",
-      "hint": "Move your thumb away from your hand to form an \"L\" — like holding a cup.",
-      "emoji": "🤟",
-      "picture": null,
-      "mode": "timed",
-      "reps": 10,
-      "workSeconds": 5,
-      "restSeconds": 3
-    },
-    {
-      "id": "fist-and-open",
-      "name": "Fist & Open",
-      "hint": "Make a fist and hold, then open with straight fingers and hold. That is one rep.",
-      "emoji": "✊",
-      "picture": null,
-      "mode": "dual",
-      "reps": 10,
-      "restSeconds": 0,
-      "phases": [
-        { "label": "Fist", "seconds": 5 },
-        { "label": "Open", "seconds": 10 }
+        {
+          "label": "Bend Up",
+          "seconds": 10,
+          "video": "video/compound-elbow up.mov"
+        },
+        {
+          "label": "Stretch",
+          "seconds": 10,
+          "video": "video/compound-elbow down.mov"
+        },
+        {
+          "label": "Rotate",
+          "seconds": 5,
+          "video": "video/compound-elbow rotate.mp4"
+        }
       ]
     }
   ]
