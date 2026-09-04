@@ -1416,6 +1416,8 @@
     flex-direction: column;
     gap: 10px;
   }
+  /* display:flex above beats the default [hidden] rule — force hide */
+  .settings-card[hidden] { display: none !important; }
   .settings-card .section-label { margin-bottom: 0; }
   .settings-hint {
     font-size: 0.92rem;
@@ -7145,6 +7147,11 @@ async function setSessionMode(mode) {
     syncSessionModeSettings();
     return;
   }
+  const previous = ME.user.sessionMode;
+  // Update the settings cards immediately so the toggle feels responsive.
+  ME.user.sessionMode = mode;
+  syncEffectiveTodayGoal();
+  syncSessionModeSettings();
   try {
     const data = await api('PATCH', '/api/me', { sessionMode: mode });
     ME.user = data.user;
@@ -7152,8 +7159,10 @@ async function setSessionMode(mode) {
     syncSessionModeSettings();
     renderStartScreen();
   } catch (err) {
-    alert(err.message || 'Could not update session mode');
+    ME.user.sessionMode = previous;
+    syncEffectiveTodayGoal();
     syncSessionModeSettings();
+    alert(err.message || 'Could not update session mode');
   }
 }
 
@@ -7184,10 +7193,10 @@ function syncSessionModeSettings() {
   });
   const fullCard = $('goal-full-card');
   const perCard = $('goal-per-exercise-card');
-  if (fullCard) fullCard.hidden = mode === 'one_exercise';
+  if (fullCard) fullCard.hidden = mode !== 'full';
   if (perCard) perCard.hidden = mode !== 'one_exercise';
-  $('goal-num').textContent = ME.user.dailyGoal;
-  renderExerciseGoalRows();
+  if ($('goal-num')) $('goal-num').textContent = ME.user.dailyGoal;
+  if (mode === 'one_exercise') renderExerciseGoalRows();
 }
 
 function renderExerciseGoalRows() {
